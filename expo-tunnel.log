@@ -1,0 +1,21 @@
+env: load .env.local
+env: export EXPO_PUBLIC_API_URL
+Starting project at S:\SpeakEasy\speakeasy-mobile
+Starting Metro Bundler
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Tunnel connected.
+Tunnel ready.
+Waiting on http://localhost:8090
+Logs for your project will appear below.
+
+Log in to EAS with email or username (exit and run 'npx expo login --help' for other login options)
+Tunnel connected.
+Web Bundling failed 13773ms node_modules\expo-router\entry.js (438 modules)
+Unable to resolve "react-native-web/dist/index" from "node_modules\expo-router\build\renderRootComponent.js"
+Web Bundling failed 801ms node_modules\expo-router\entry.js (392 modules)
+Unable to resolve "react-native-web/dist/index" from "node_modules\expo-router\build\renderRootComponent.js"
+
+Log in to EAS with email or username (exit and run 'npx expo login --help' for other login options)
+
+Log in to EAS with email or username (exit and run 'npx expo login --help' for other login options)
+Tunnel connected.
