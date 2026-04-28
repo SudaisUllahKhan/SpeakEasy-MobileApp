@@ -140,7 +140,7 @@ export async function getGoogleAuthUrl(): Promise<string> {
   const { csrfToken } = (await csrfResponse.json()) as { csrfToken: string };
 
   const params = new URLSearchParams({
-    callbackUrl: `${API_URL}`,
+    callbackUrl: `${API_URL}/api/auth/mobile-token`,
     csrfToken,
   });
 

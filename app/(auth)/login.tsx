@@ -9,6 +9,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -64,6 +65,7 @@ export default function LoginScreen(): React.ReactElement {
   };
 
   const handleGoogleSignIn = async () => {
+    Keyboard.dismiss();
     setGoogleLoading(true);
     try {
       const googleUrl = await getGoogleAuthUrl();
@@ -73,7 +75,6 @@ export default function LoginScreen(): React.ReactElement {
       );
 
       if (result.type === "success" && result.url) {
-        // Extract session token from callback URL
         const url = new URL(result.url);
         const sessionToken =
           url.searchParams.get("sessionToken") ??
@@ -84,8 +85,7 @@ export default function LoginScreen(): React.ReactElement {
           await loadFromStorage();
           router.replace("/(app)/dashboard");
         } else {
-          // Open in browser to complete OAuth flow
-          await WebBrowser.openBrowserAsync(`${API_URL}/api/auth/signin/google`);
+          Alert.alert("Sign In Error", "Could not retrieve session. Please try again.");
         }
       }
     } catch (err) {
