@@ -17,6 +17,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import * as Speech from "expo-speech";
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://your-speakeasy-domain.com";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -68,9 +70,72 @@ const STEP_LABELS: Record<LessonStep, string> = {
   summary: "Summary",
 };
 
+// ─── Voice presets ────────────────────────────────────────────────────────────
+
+interface VoicePreset {
+  id: string;
+  label: string;
+  icon: string;
+  iconType: "ionicon" | "flag";
+  color: string;
+  pitch: number;
+  rate: number;
+  language: string;
+}
+
+const VOICE_PRESETS: VoicePreset[] = [
+  { id: "female",      label: "Female",     icon: "person-circle",  iconType: "ionicon", color: "#7C3AED", pitch: 1.0,  rate: 1.0,  language: "en-US" },
+  { id: "girl",        label: "Girl",       icon: "happy",          iconType: "ionicon", color: "#EC4899", pitch: 1.6,  rate: 1.1,  language: "en-US" },
+  { id: "human",       label: "Human",      icon: "person",         iconType: "ionicon", color: "#0EA5E9", pitch: 1.0,  rate: 1.0,  language: "en-US" },
+  { id: "boy",         label: "Boy",        icon: "happy-outline",  iconType: "ionicon", color: "#6366F1", pitch: 0.9,  rate: 1.0,  language: "en-US" },
+  { id: "american",    label: "American",   icon: "🇺🇸",            iconType: "flag",    color: "#3B82F6", pitch: 1.0,  rate: 1.0,  language: "en-US" },
+  { id: "british",     label: "British",    icon: "🇬🇧",            iconType: "flag",    color: "#EF4444", pitch: 1.0,  rate: 0.9,  language: "en-GB" },
+  { id: "indian",      label: "Indian",     icon: "🇮🇳",            iconType: "flag",    color: "#F97316", pitch: 1.0,  rate: 0.85, language: "en-IN" },
+  { id: "australian",  label: "Australian", icon: "🇦🇺",            iconType: "flag",    color: "#10B981", pitch: 1.0,  rate: 1.0,  language: "en-AU" },
+  { id: "storyteller", label: "Story",      icon: "book",           iconType: "ionicon", color: "#92400E", pitch: 1.15, rate: 0.75, language: "en-US" },
+];
+
+const SPEED_OPTIONS = ["1", "1.5", "2"] as const;
+type SpeedOption = typeof SPEED_OPTIONS[number];
+
+function wordWeight(word: string): number {
+  const chars = word.replace(/[^a-zA-Z']/g, "").length || 3;
+  const factor = Math.max(0.5, Math.min(2.5, chars / 4.5));
+  const hasPause = /[.,!?;:]$/.test(word);
+  return factor + (hasPause ? 0.4 : 0);
+}
+
+function calcWordTimestamps(words: string[], speed: SpeedOption, durationMs?: number): number[] {
+  const startupMs = 280;
+  const timestamps: number[] = [];
+
+  if (durationMs && durationMs > 1000) {
+    // Accurate mode: distribute actual audio duration proportionally across words
+    const usable = durationMs - startupMs - 150; // leave 150ms tail
+    const weights = words.map(wordWeight);
+    const total = weights.reduce((a, b) => a + b, 0);
+    let t = startupMs;
+    for (let i = 0; i < words.length; i++) {
+      timestamps.push(t);
+      t += (weights[i] / total) * usable;
+    }
+    return timestamps;
+  }
+
+  // Fallback: WPM estimate
+  const wpm = speed === "2" ? 260 : speed === "1.5" ? 185 : 130;
+  const avgMs = 60000 / wpm;
+  let t = startupMs;
+  for (const word of words) {
+    timestamps.push(t);
+    t += avgMs * wordWeight(word);
+  }
+  return timestamps;
+}
+
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
-export default function LessonPlayerScreen(): React.ReactElement {
+function LessonPlayerScreen(): React.ReactElement {
   const router = useRouter();
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const { user } = useAuthStore();
@@ -222,13 +287,39 @@ export default function LessonPlayerScreen(): React.ReactElement {
           difficultWords={difficultWords}
           pronunciationTip={pronunciationTip}
           questionResponses={questionResponses}
+          onTryAgain={() => {
+            Speech.stop();
+            setStep("listen");
+            setAttemptId(null);
+            setScoredWords([]);
+            setPronunciationScore(null);
+            setFluencyScore(null);
+            setQuestions([]);
+            setQuestionIndex(0);
+            setQuestionResponses([]);
+            setComprehensionScore(null);
+            setDifficultWords([]);
+            setPronunciationTip(null);
+            setXpEarned(0);
+          }}
           onBackToTopic={() => {
             Speech.stop();
-            router.back();
+            const topicSlug = lesson.topic?.slug;
+            if (topicSlug) {
+              router.replace(`/(app)/topics/${topicSlug}` as never);
+            } else {
+              router.replace("/(app)/dashboard" as never);
+            }
           }}
           onNextLesson={() => {
             Speech.stop();
-            router.back();
+            const next = (lesson as typeof lesson & { nextLessonSlug?: string | null }).nextLessonSlug;
+            if (next) {
+              router.replace(`/(app)/lessons/${next}` as never);
+            } else {
+              const topicSlug = lesson.topic?.slug;
+              router.replace(topicSlug ? `/(app)/topics/${topicSlug}` as never : "/(app)/dashboard" as never);
+            }
           }}
         />
       )}
@@ -273,28 +364,114 @@ interface ListenStepProps {
   onComplete: () => void;
 }
 
+const ACCENT_TO_VOICE: Record<string, string> = {
+  US: "american",
+  UK: "british",
+  AU: "australian",
+  IN: "indian",
+};
+
 function ListenStep({ lesson, level, onComplete }: ListenStepProps) {
   const { user } = useAuthStore();
+  const defaultVoice = ACCENT_TO_VOICE[user?.preferredAccent ?? "US"] ?? "american";
   const [isPlaying, setIsPlaying] = useState(false);
   const [replaysUsed, setReplaysUsed] = useState(0);
+  const [selectedVoiceId, setSelectedVoiceId] = useState(defaultVoice);
+  const [selectedSpeed, setSelectedSpeed] = useState<SpeedOption>("1");
+  const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const speakRequestRef = useRef(0);
   const MAX_REPLAYS = 3;
 
-  const speak = useCallback(() => {
+  const passageWords = lesson.passageText.split(/\s+/);
+
+  const stopAudio = async () => {
+    Speech.stop();
+    if (soundRef.current) {
+      await soundRef.current.stopAsync().catch(() => {});
+      await soundRef.current.unloadAsync().catch(() => {});
+      soundRef.current = null;
+    }
+    setIsPlaying(false);
+    setHighlightedWordIndex(-1);
+  };
+
+  const speakWithAzure = async (voiceId: string, speed?: SpeedOption) => {
+    const myId = ++speakRequestRef.current;
+    await stopAudio();
+    if (myId !== speakRequestRef.current) return; // newer request took over
+    setIsPlaying(true);
+    const spd = speed ?? selectedSpeed;
+    try {
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false, staysActiveInBackground: true, shouldDuckAndroid: false });
+      const encodedText = encodeURIComponent(lesson.passageText);
+      const uri = `${API_URL}/api/tts?voiceId=${voiceId}&text=${encodedText}&speed=${spd}`;
+      const { sound } = await Audio.Sound.createAsync(
+        { uri },
+        { shouldPlay: false },
+        undefined,
+        true // downloadFirst — avoids mid-playback cut-outs
+      );
+      if (myId !== speakRequestRef.current) {
+        await sound.stopAsync().catch(() => {});
+        await sound.unloadAsync().catch(() => {});
+        return;
+      }
+      soundRef.current = sound;
+      // Get actual audio duration for accurate word timing
+      const loadedStatus = await sound.getStatusAsync();
+      const durationMs = loadedStatus.isLoaded ? (loadedStatus.durationMillis ?? undefined) : undefined;
+      const wordTimestamps = calcWordTimestamps(passageWords, spd, durationMs);
+      // Fire status updates every 80ms for smooth highlight tracking
+      await sound.setStatusAsync({ progressUpdateIntervalMillis: 80 });
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (!status.isLoaded) return;
+        if (status.positionMillis != null) {
+          const pos = status.positionMillis;
+          let idx = -1;
+          for (let i = 0; i < wordTimestamps.length; i++) {
+            if (pos >= wordTimestamps[i]) idx = i;
+            else break;
+          }
+          setHighlightedWordIndex(idx);
+        }
+        if (status.didJustFinish) {
+          setIsPlaying(false);
+          setHighlightedWordIndex(-1);
+          sound.unloadAsync().catch(() => {});
+          soundRef.current = null;
+        }
+      });
+    } catch {
+      if (myId !== speakRequestRef.current) return;
+      const v = VOICE_PRESETS.find((p) => p.id === voiceId) ?? VOICE_PRESETS[0];
+      Speech.speak(lesson.passageText, {
+        language: v.language,
+        pitch: v.pitch,
+        rate: (user?.audioSpeed ?? 1.0) * v.rate,
+        onDone: () => setIsPlaying(false),
+        onError: () => setIsPlaying(false),
+        onStopped: () => setIsPlaying(false),
+      });
+    }
+  };
+
+  const speak = useCallback(async (voiceId?: string) => {
+    const id = voiceId ?? selectedVoiceId;
     if (isPlaying) {
-      Speech.stop();
-      setIsPlaying(false);
+      speakRequestRef.current++; // cancel any in-flight load
+      await stopAudio();
       return;
     }
+    await speakWithAzure(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, selectedVoiceId, lesson.passageText]);
 
-    setIsPlaying(true);
-    Speech.speak(lesson.passageText, {
-      language: "en-US",
-      rate: user?.audioSpeed ?? 1.0,
-      onDone: () => setIsPlaying(false),
-      onError: () => setIsPlaying(false),
-      onStopped: () => setIsPlaying(false),
-    });
-  }, [isPlaying, lesson.passageText, user?.audioSpeed]);
+  const handleVoiceSelect = async (voice: VoicePreset) => {
+    setSelectedVoiceId(voice.id);
+    await speakWithAzure(voice.id);
+  };
 
   const handleReplay = () => {
     if (replaysUsed >= MAX_REPLAYS) return;
@@ -303,11 +480,10 @@ function ListenStep({ lesson, level, onComplete }: ListenStepProps) {
   };
 
   useEffect(() => {
-    // Auto-play on mount
-    const timer = setTimeout(speak, 500);
+    const timer = setTimeout(() => speakWithAzure(defaultVoice), 500);
     return () => {
       clearTimeout(timer);
-      Speech.stop();
+      stopAudio();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -328,16 +504,96 @@ function ListenStep({ lesson, level, onComplete }: ListenStepProps) {
           </Text>
         </View>
 
-        {/* Passage text */}
+        {/* Passage text with word highlighting */}
         <Card style={styles.passageCard}>
-          <Text style={styles.passageText}>{lesson.passageText}</Text>
+          <View style={styles.passageWordRow}>
+            {passageWords.map((word, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.passageWordChip,
+                  highlightedWordIndex === i && styles.passageWordChipActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.passageText,
+                    highlightedWordIndex === i && styles.passageWordChipText,
+                  ]}
+                >
+                  {word}
+                </Text>
+              </View>
+            ))}
+          </View>
         </Card>
+
+        {/* Voice selector */}
+        <View style={styles.voiceSelectorSection}>
+          <Text style={styles.voiceSelectorLabel}>Choose a voice</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.voiceSelectorRow}
+          >
+            {VOICE_PRESETS.map((voice) => (
+              <TouchableOpacity
+                key={voice.id}
+                style={[
+                  styles.voiceChip,
+                  selectedVoiceId === voice.id && {
+                    borderColor: voice.color,
+                    backgroundColor: voice.color + "18",
+                  },
+                ]}
+                onPress={() => handleVoiceSelect(voice)}
+                accessibilityLabel={`Select ${voice.label} voice`}
+                accessibilityState={{ selected: selectedVoiceId === voice.id }}
+              >
+                {voice.iconType === "flag" ? (
+                    <Text style={styles.voiceChipFlag}>{voice.icon}</Text>
+                  ) : (
+                    <Ionicons
+                      name={voice.icon as React.ComponentProps<typeof Ionicons>["name"]}
+                      size={22}
+                      color={voice.color}
+                    />
+                  )}
+                <Text style={[styles.voiceChipLabel, { color: voice.color }]}>
+                  {voice.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Speed selector */}
+        <View style={styles.speedSelectorRow}>
+          <Text style={styles.speedSelectorLabel}>Speed</Text>
+          <View style={styles.speedButtons}>
+            {SPEED_OPTIONS.map((s) => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.speedBtn, selectedSpeed === s && styles.speedBtnActive]}
+                onPress={() => {
+                  setSelectedSpeed(s);
+                  if (isPlaying) void speakWithAzure(selectedVoiceId, s);
+                }}
+                accessibilityLabel={`Set speed to ${s}x`}
+              >
+                <Text style={[styles.speedBtnText, selectedSpeed === s && styles.speedBtnTextActive]}>
+                  {s}x
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
         {/* Player controls */}
         <View style={styles.audioControls}>
           <TouchableOpacity
             style={[styles.playButton, isPlaying && styles.playButtonActive]}
-            onPress={speak}
+            onPress={() => speak()}
             accessibilityLabel={isPlaying ? "Pause" : "Play passage"}
           >
             <Ionicons
@@ -401,6 +657,72 @@ function ReadAloudStep({ lesson, level, user, onComplete }: ReadAloudStepProps) 
   const [scoredWords, setScoredWords] = useState<ScoredWord[]>([]);
   const [showScored, setShowScored] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [listenVoiceId, setListenVoiceId] = useState("female");
+  const [listenSpeed, setListenSpeed] = useState<SpeedOption>("1");
+  const [isListening, setIsListening] = useState(false);
+
+  const listenSoundRef = useRef<Audio.Sound | null>(null);
+  const listenRequestRef = useRef(0);
+
+  const stopListenAudio = async () => {
+    Speech.stop();
+    if (listenSoundRef.current) {
+      await listenSoundRef.current.stopAsync().catch(() => {});
+      await listenSoundRef.current.unloadAsync().catch(() => {});
+      listenSoundRef.current = null;
+    }
+    setIsListening(false);
+  };
+
+  const handleListenAgain = async (voiceId?: string, speed?: SpeedOption) => {
+    const id = voiceId ?? listenVoiceId;
+    const spd = speed ?? listenSpeed;
+    const myId = ++listenRequestRef.current;
+
+    await stopListenAudio();
+    if (myId !== listenRequestRef.current) return;
+    if (!voiceId && !speed && myId === listenRequestRef.current) {
+      // tapped stop — already stopped above
+      return;
+    }
+    setIsListening(true);
+    try {
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false, staysActiveInBackground: true, shouldDuckAndroid: false });
+      const encodedText = encodeURIComponent(lesson.passageText);
+      const uri = `${API_URL}/api/tts?voiceId=${id}&text=${encodedText}&speed=${spd}`;
+      const { sound } = await Audio.Sound.createAsync(
+        { uri },
+        { shouldPlay: false },
+        undefined,
+        true // downloadFirst — avoids mid-playback cut-outs
+      );
+      if (myId !== listenRequestRef.current) {
+        await sound.stopAsync().catch(() => {});
+        await sound.unloadAsync().catch(() => {});
+        return;
+      }
+      listenSoundRef.current = sound;
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setIsListening(false);
+          sound.unloadAsync().catch(() => {});
+          listenSoundRef.current = null;
+        }
+      });
+    } catch {
+      if (myId !== listenRequestRef.current) return;
+      const voice = VOICE_PRESETS.find((v) => v.id === id) ?? VOICE_PRESETS[0];
+      Speech.speak(lesson.passageText, {
+        language: voice.language,
+        pitch: voice.pitch,
+        rate: voice.rate,
+        onDone: () => setIsListening(false),
+        onError: () => setIsListening(false),
+        onStopped: () => setIsListening(false),
+      });
+    }
+  };
 
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingStartTime = useRef<number>(0);
@@ -421,6 +743,7 @@ function ReadAloudStep({ lesson, level, user, onComplete }: ReadAloudStepProps) 
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
       });
 
       const { recording } = await Audio.Recording.createAsync(
@@ -601,6 +924,87 @@ function ReadAloudStep({ lesson, level, user, onComplete }: ReadAloudStepProps) 
               >
                 Score my reading
               </Button>
+            </View>
+          )}
+
+          {/* Listen again */}
+          {!showScored && (
+            <View style={styles.listenAgainSection}>
+              <Text style={styles.listenAgainLabel}>Listen again before recording</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.voiceSelectorRow}
+              >
+                {VOICE_PRESETS.map((voice) => (
+                  <TouchableOpacity
+                    key={voice.id}
+                    style={[
+                      styles.voiceChip,
+                      listenVoiceId === voice.id && {
+                        borderColor: voice.color,
+                        backgroundColor: voice.color + "18",
+                      },
+                    ]}
+                    onPress={() => {
+                      setListenVoiceId(voice.id);
+                      void handleListenAgain(voice.id);
+                    }}
+                    accessibilityLabel={`Listen with ${voice.label} voice`}
+                  >
+                    {voice.iconType === "flag" ? (
+                    <Text style={styles.voiceChipFlag}>{voice.icon}</Text>
+                  ) : (
+                    <Ionicons
+                      name={voice.icon as React.ComponentProps<typeof Ionicons>["name"]}
+                      size={22}
+                      color={voice.color}
+                    />
+                  )}
+                    <Text style={[
+                      styles.voiceChipLabel,
+                      listenVoiceId === voice.id && styles.voiceChipLabelActive,
+                    ]}>
+                      {voice.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <View style={[styles.speedSelectorRow, { marginBottom: 8 }]}>
+                <Text style={styles.speedSelectorLabel}>Speed</Text>
+                <View style={styles.speedButtons}>
+                  {SPEED_OPTIONS.map((s) => (
+                    <TouchableOpacity
+                      key={s}
+                      style={[styles.speedBtn, listenSpeed === s && styles.speedBtnActive]}
+                      onPress={() => {
+                        setListenSpeed(s);
+                        if (isListening) void handleListenAgain(listenVoiceId, s);
+                      }}
+                      accessibilityLabel={`Set speed to ${s}x`}
+                    >
+                      <Text style={[styles.speedBtnText, listenSpeed === s && styles.speedBtnTextActive]}>
+                        {s}x
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.listenAgainBtn}
+                onPress={() => isListening ? stopListenAudio() : handleListenAgain(listenVoiceId, listenSpeed)}
+                accessibilityLabel={isListening ? "Stop listening" : "Listen again"}
+              >
+                <Ionicons
+                  name={isListening ? "stop-circle" : "play-circle"}
+                  size={20}
+                  color={colors.primary}
+                />
+                <Text style={styles.listenAgainBtnText}>
+                  {isListening ? "Stop" : "Listen again"}
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -1132,6 +1536,7 @@ interface SummaryStepProps {
   questionResponses: QuestionResponse[];
   onBackToTopic: () => void;
   onNextLesson: () => void;
+  onTryAgain: () => void;
 }
 
 function SummaryStep({
@@ -1144,6 +1549,7 @@ function SummaryStep({
   questionResponses,
   onBackToTopic,
   onNextLesson,
+  onTryAgain,
 }: SummaryStepProps) {
   const overallScore =
     ((pronunciationScore ?? 0) +
@@ -1216,24 +1622,55 @@ function SummaryStep({
         )}
 
         {/* Actions */}
-        <Button
-          onPress={onNextLesson}
-          fullWidth
-          size="lg"
-          style={styles.ctaButton}
-          accessibilityLabel="Next lesson"
-        >
-          Next lesson
-        </Button>
-        <Button
-          onPress={onBackToTopic}
-          variant="outline"
-          fullWidth
-          size="lg"
-          accessibilityLabel="Back to topic"
-        >
-          Back to topic
-        </Button>
+        {overallScore < 5 ? (
+          <>
+            <View style={styles.retryBanner}>
+              <Ionicons name="information-circle" size={20} color="#92400E" />
+              <Text style={styles.retryBannerText}>
+                Score below 5 — practice more to unlock the next lesson!
+              </Text>
+            </View>
+            <Button
+              onPress={onTryAgain}
+              fullWidth
+              size="lg"
+              style={styles.ctaButton}
+              accessibilityLabel="Try this lesson again"
+            >
+              Try again
+            </Button>
+            <Button
+              onPress={onBackToTopic}
+              variant="outline"
+              fullWidth
+              size="lg"
+              accessibilityLabel="Back to topic"
+            >
+              Back to topic
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              onPress={onNextLesson}
+              fullWidth
+              size="lg"
+              style={styles.ctaButton}
+              accessibilityLabel="Next lesson"
+            >
+              Next lesson
+            </Button>
+            <Button
+              onPress={onBackToTopic}
+              variant="outline"
+              fullWidth
+              size="lg"
+              accessibilityLabel="Back to topic"
+            >
+              Back to topic
+            </Button>
+          </>
+        )}
       </View>
     </ScrollView>
   );
@@ -1367,10 +1804,31 @@ const styles = StyleSheet.create({
   passageCard: {
     marginBottom: spacing.md,
   },
+  passageWordRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 2,
+  },
+  passageWordChip: {
+    paddingHorizontal: 3,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  passageWordChipActive: {
+    backgroundColor: "#DDD6FE",
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    transform: [{ scale: 1.08 }],
+  },
   passageText: {
     fontSize: fontSize.base,
     color: colors.text,
-    lineHeight: 26,
+    lineHeight: 24,
+  },
+  passageWordChipText: {
+    color: "#5B21B6",
+    fontWeight: fontWeight.bold,
   },
   audioControls: {
     alignItems: "center",
@@ -1784,4 +2242,138 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginTop: spacing.md,
   },
+  speedSelectorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: spacing.md,
+  },
+  speedSelectorLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  speedButtons: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  speedBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  speedBtnActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryBg,
+  },
+  speedBtnText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.textSecondary,
+  },
+  speedBtnTextActive: {
+    color: colors.primary,
+  },
+  voiceSelectorSection: {
+    marginBottom: spacing.md,
+  },
+  voiceSelectorLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  voiceSelectorRow: {
+    gap: 8,
+    paddingRight: spacing.sm,
+  },
+  voiceChip: {
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    minWidth: 68,
+  },
+  voiceChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryBg,
+  },
+  voiceChipFlag: {
+    fontSize: 24,
+    marginBottom: 4,
+    lineHeight: 28,
+  },
+  voiceChipLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+    color: colors.textSecondary,
+    textAlign: "center",
+  },
+  voiceChipLabelActive: {
+    color: colors.primary,
+    fontWeight: fontWeight.semibold,
+  },
+  retryBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#FEF3C7",
+    borderRadius: borderRadius.md,
+    padding: 12,
+    marginBottom: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  retryBannerText: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: "#92400E",
+    lineHeight: 20,
+  },
+  listenAgainSection: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: 10,
+  },
+  listenAgainLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
+    marginBottom: 4,
+  },
+  listenAgainBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primaryBg,
+  },
+  listenAgainBtnText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.primary,
+  },
 });
+
+export default function LessonRoute(): React.ReactElement {
+  const { slug } = useLocalSearchParams<{ slug: string }>();
+  const key = Array.isArray(slug) ? slug[0] : (slug ?? "unknown");
+  return <LessonPlayerScreen key={key} />;
+}

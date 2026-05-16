@@ -52,15 +52,16 @@
         }
       ]
     ],
+    "newArchEnabled": false,
     "experiments": {
       "typedRoutes": true
+    },
+    "updates": {
+      "enabled": false
     },
     "extra": {
       "router": {
         "origin": false
-      },
-      "eas": {
-        "projectId": "speakeasy"
       }
     }
   }

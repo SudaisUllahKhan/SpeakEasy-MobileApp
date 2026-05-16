@@ -25,6 +25,10 @@ const API_URL =
 
 async function getToken(): Promise<string | null> {
   try {
+    // Try in-memory Zustand store first (more reliable on Android new arch)
+    const { useAuthStore } = await import("./authStore");
+    const storeToken = useAuthStore.getState().token;
+    if (storeToken) return storeToken;
     return await SecureStore.getItemAsync("sessionToken");
   } catch {
     return null;
@@ -33,7 +37,8 @@ async function getToken(): Promise<string | null> {
 
 async function apiFetch<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  timeoutMs = 10000
 ): Promise<T> {
   const token = await getToken();
   const headers: Record<string, string> = {
@@ -43,15 +48,28 @@ async function apiFetch<T>(
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
-    // Also pass as cookie for NextAuth session strategy
     headers["Cookie"] = `next-auth.session-token=${token}`;
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-    credentials: "include",
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+      credentials: "include",
+      signal: controller.signal,
+    });
+  } catch (err: unknown) {
+    clearTimeout(timer);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("Request timed out. Check your connection.");
+    }
+    throw new Error("Network request failed. Is the server running?");
+  }
+  clearTimeout(timer);
 
   if (!response.ok) {
     let errorMessage = `HTTP ${response.status}`;
@@ -61,6 +79,11 @@ async function apiFetch<T>(
     } catch {
       // ignore JSON parse errors
     }
+    // Auto-logout on 401 so user sees login screen instead of endless errors
+    if (response.status === 401) {
+      const { useAuthStore } = await import("./authStore");
+      void useAuthStore.getState().logout();
+    }
     throw new ApiError(errorMessage, response.status);
   }
 
@@ -69,7 +92,8 @@ async function apiFetch<T>(
 
 async function apiFetchFormData<T>(
   path: string,
-  formData: FormData
+  formData: FormData,
+  timeoutMs = 90000
 ): Promise<T> {
   const token = await getToken();
   const headers: Record<string, string> = {};
@@ -79,12 +103,26 @@ async function apiFetchFormData<T>(
     headers["Cookie"] = `next-auth.session-token=${token}`;
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    method: "POST",
-    headers,
-    body: formData,
-    credentials: "include",
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers,
+      body: formData,
+      credentials: "include",
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new ApiError("Scoring timed out. Please try again.", 408);
+    }
+    throw err;
+  }
+  clearTimeout(timer);
 
   if (!response.ok) {
     let errorMessage = `HTTP ${response.status}`;
@@ -112,46 +150,12 @@ export class ApiError extends Error {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-export async function sendMagicLink(email: string): Promise<void> {
-  // Call NextAuth's email sign-in endpoint (CSRF token required)
-  const csrfResponse = await fetch(`${API_URL}/api/auth/csrf`);
-  const { csrfToken } = (await csrfResponse.json()) as { csrfToken: string };
-
-  const formBody = new URLSearchParams({
-    email,
-    csrfToken,
-    callbackUrl: `${API_URL}/api/auth/callback/email`,
-    json: "true",
-  });
-
-  const response = await fetch(`${API_URL}/api/auth/signin/email`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: formBody.toString(),
-  });
-
-  if (!response.ok) {
-    throw new ApiError("Failed to send magic link", response.status);
-  }
-}
-
-export async function getGoogleAuthUrl(): Promise<string> {
-  const csrfResponse = await fetch(`${API_URL}/api/auth/csrf`);
-  const { csrfToken } = (await csrfResponse.json()) as { csrfToken: string };
-
-  const params = new URLSearchParams({
-    callbackUrl: `${API_URL}/api/auth/mobile-token`,
-    csrfToken,
-  });
-
-  return `${API_URL}/api/auth/signin/google?${params.toString()}`;
-}
-
-export async function exchangeSessionToken(
-  token: string
-): Promise<{ sessionToken: string }> {
-  // Store the session cookie as a token
-  return { sessionToken: token };
+export async function getGoogleAuthUrl(mobileRedirect: string): Promise<string> {
+  // /google-auth handles CSRF in the browser's own cookie context (avoids cookie jar mismatch).
+  // mobileRedirect tells mobile-token which scheme to use:
+  //   - Expo Go:   exp://localhost:8090/--/auth/callback
+  //   - Standalone: speakeasy://auth/callback
+  return `${API_URL}/google-auth?mobileRedirect=${encodeURIComponent(mobileRedirect)}`;
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -213,7 +217,30 @@ export async function getTopicLessons(slug: string): Promise<{
   topic: Topic;
   lessons: LessonWithStatus[];
 }> {
-  return apiFetch(`/api/topics/${slug}`);
+  const response = await apiFetch<{
+    data: Array<
+      Lesson & {
+        completed: boolean;
+        available: boolean;
+        bestScores: {
+          pronunciationScore: number | null;
+          fluencyScore: number | null;
+          comprehensionScore: number | null;
+        } | null;
+      }
+    >;
+    topic: Topic;
+  }>(`/api/topics/${slug}/lessons`);
+
+  const lessons: LessonWithStatus[] = response.data.map((l) => ({
+    ...l,
+    status: l.completed ? "completed" : l.available ? "available" : "locked",
+    bestPronunciation: l.bestScores?.pronunciationScore ?? undefined,
+    bestFluency: l.bestScores?.fluencyScore ?? undefined,
+    bestComprehension: l.bestScores?.comprehensionScore ?? undefined,
+  }));
+
+  return { topic: response.topic, lessons };
 }
 
 // ─── Lessons ─────────────────────────────────────────────────────────────────

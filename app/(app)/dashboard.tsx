@@ -192,7 +192,7 @@ export default function DashboardScreen(): React.ReactElement {
 
         {/* CTA */}
         <Button
-          onPress={() => router.push("/(app)/topics/index")}
+          onPress={() => router.push("/(app)/topics")}
           size="lg"
           fullWidth
           style={styles.ctaButton}

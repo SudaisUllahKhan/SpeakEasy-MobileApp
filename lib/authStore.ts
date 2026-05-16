@@ -54,47 +54,59 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   loadFromStorage: async () => {
-    set({ isLoading: true });
+    const alreadyHasToken = !!get().token;
+    if (!alreadyHasToken) set({ isLoading: true });
     try {
-      const token = await SecureStore.getItemAsync(SESSION_TOKEN_KEY);
+      // Read from SecureStore only — fast (<100ms), never blocks on network.
+      const token = alreadyHasToken
+        ? get().token
+        : await SecureStore.getItemAsync(SESSION_TOKEN_KEY);
+
       if (token) {
         set({ token, isAuthenticated: true });
 
-        // Try to hydrate user profile from the API
-        try {
-          const { getUserSettings } = await import("./api");
-          const settings = await getUserSettings();
-          const user: UserProfile = {
-            id: "",
-            email: settings.email ?? "",
-            name: settings.name,
-            image: null,
-            role: "STUDENT",
-            level: settings.level as Level,
-            nativeLanguage: settings.nativeLanguage,
-            preferredAccent: settings.preferredAccent as Accent,
-            audioSpeed: settings.audioSpeed,
-            streakCount: 0,
-            totalXP: 0,
-            onboardingDone: true,
-            isPremium: false,
-            badges: [],
-            createdAt: new Date().toISOString(),
-          };
-          set({ user });
-        } catch {
-          // Token may be expired — clear it
-          await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
+        // Fetch user profile in the background — never block the splash screen on a
+        // network call. If the server is slow to start the user still sees the app.
+        void import("./api").then(async ({ getUserSettings }) => {
+          try {
+            const settings = await getUserSettings();
+            const user: UserProfile = {
+              id: "",
+              email: settings.email ?? "",
+              name: settings.name,
+              image: null,
+              role: "STUDENT",
+              level: settings.level as Level,
+              nativeLanguage: settings.nativeLanguage,
+              preferredAccent: settings.preferredAccent as Accent,
+              audioSpeed: settings.audioSpeed,
+              streakCount: 0,
+              totalXP: 0,
+              onboardingDone: true,
+              isPremium: false,
+              badges: [],
+              createdAt: new Date().toISOString(),
+            };
+            set({ user });
+          } catch {
+            // Network unavailable — user is still authenticated, they'll see fresh
+            // data on next successful API call.
+          }
+        });
+      } else {
+        // SecureStore returned null — only clear auth if setToken() didn't win a race.
+        if (!get().token) {
           set({ token: null, isAuthenticated: false, user: null });
         }
-      } else {
-        set({ token: null, isAuthenticated: false, user: null });
       }
     } catch (err) {
       console.error("[authStore] loadFromStorage error:", err);
-      set({ token: null, isAuthenticated: false, user: null });
+      if (!get().token) {
+        set({ token: null, isAuthenticated: false, user: null });
+      }
     } finally {
-      set({ isLoading: false });
+      // Always unblock the UI after the SecureStore read — never wait for network.
+      if (!alreadyHasToken) set({ isLoading: false });
     }
   },
 

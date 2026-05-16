@@ -5,9 +5,10 @@ import { useAuthStore } from "@/lib/authStore";
 import { colors, fontSize } from "@/lib/theme";
 
 export default function AppLayout(): React.ReactElement {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, isLoading } = useAuthStore();
 
-  if (!isAuthenticated) {
+  // Don't redirect while auth state is still being loaded from storage.
+  if (!isLoading && !isAuthenticated) {
     return <Redirect href="/(auth)/login" />;
   }
 

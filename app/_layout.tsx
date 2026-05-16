@@ -80,24 +80,27 @@ const eb = StyleSheet.create({
   },
 });
 
-function AppContent(): React.ReactElement | null {
-  const { loadFromStorage, isLoading } = useAuthStore();
+function AppContent(): React.ReactElement {
+  const { loadFromStorage } = useAuthStore();
 
   useEffect(() => {
+    // Hard cap: never show splash for more than 3s regardless of network state.
+    const maxWait = setTimeout(() => SplashScreen.hideAsync(), 3000);
     loadFromStorage().finally(() => {
+      clearTimeout(maxWait);
       SplashScreen.hideAsync();
     });
   }, [loadFromStorage]);
 
-  if (isLoading) {
-    return null;
-  }
-
+  // Always render the Stack — native splash covers UI during loading so there is
+  // no flash. Returning null was causing the Stack to unmount which broke
+  // router.replace() calls that fire from the auth/callback deep-link screen.
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(app)" />
+      <Stack.Screen name="auth/callback" />
     </Stack>
   );
 }
