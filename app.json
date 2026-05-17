@@ -18,7 +18,6 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "ai.innov8ive.speakeasy",
-      "deploymentTarget": "16.0",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "SpeakEasy needs microphone access to record your spoken answers for pronunciation scoring.",
         "NSCameraUsageDescription": "SpeakEasy may need camera access for profile photos.",
@@ -31,7 +30,6 @@
         "backgroundColor": "#7C3AED"
       },
       "package": "ai.innov8ive.speakeasy",
-      "minSdkVersion": 26,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
