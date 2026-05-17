@@ -55,7 +55,8 @@
       "typedRoutes": true
     },
     "updates": {
-      "enabled": false
+      "enabled": true,
+      "url": "https://u.expo.dev/398c7481-800e-4754-b48a-727981d15cb9"
     },
     "extra": {
       "router": {
