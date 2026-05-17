@@ -12,13 +12,14 @@ import {
   KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import * as Speech from "expo-speech";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "https://your-speakeasy-domain.com";
+import { queryClient } from "@/lib/queryClient";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -59,6 +60,19 @@ import type {
   Level,
 } from "@/lib/types";
 
+// ─── Module-level audio tracker — stops audio when screen loses focus ─────────
+
+let _activeSound: Audio.Sound | null = null;
+
+async function stopModuleAudio() {
+  Speech.stop();
+  if (_activeSound) {
+    try { await _activeSound.stopAsync(); } catch { /* ignore */ }
+    try { await _activeSound.unloadAsync(); } catch { /* ignore */ }
+    _activeSound = null;
+  }
+}
+
 // ─── Step indicator ───────────────────────────────────────────────────────────
 
 const STEPS: LessonStep[] = ["listen", "read", "questions", "feedback", "summary"];
@@ -84,18 +98,18 @@ interface VoicePreset {
 }
 
 const VOICE_PRESETS: VoicePreset[] = [
-  { id: "female",      label: "Female",     icon: "person-circle",  iconType: "ionicon", color: "#7C3AED", pitch: 1.0,  rate: 1.0,  language: "en-US" },
-  { id: "girl",        label: "Girl",       icon: "happy",          iconType: "ionicon", color: "#EC4899", pitch: 1.6,  rate: 1.1,  language: "en-US" },
-  { id: "human",       label: "Human",      icon: "person",         iconType: "ionicon", color: "#0EA5E9", pitch: 1.0,  rate: 1.0,  language: "en-US" },
-  { id: "boy",         label: "Boy",        icon: "happy-outline",  iconType: "ionicon", color: "#6366F1", pitch: 0.9,  rate: 1.0,  language: "en-US" },
-  { id: "american",    label: "American",   icon: "🇺🇸",            iconType: "flag",    color: "#3B82F6", pitch: 1.0,  rate: 1.0,  language: "en-US" },
-  { id: "british",     label: "British",    icon: "🇬🇧",            iconType: "flag",    color: "#EF4444", pitch: 1.0,  rate: 0.9,  language: "en-GB" },
-  { id: "indian",      label: "Indian",     icon: "🇮🇳",            iconType: "flag",    color: "#F97316", pitch: 1.0,  rate: 0.85, language: "en-IN" },
-  { id: "australian",  label: "Australian", icon: "🇦🇺",            iconType: "flag",    color: "#10B981", pitch: 1.0,  rate: 1.0,  language: "en-AU" },
-  { id: "storyteller", label: "Story",      icon: "book",           iconType: "ionicon", color: "#92400E", pitch: 1.15, rate: 0.75, language: "en-US" },
+  { id: "female",      label: "Female",     icon: "🌸",  iconType: "flag", color: "#7C3AED", pitch: 1.0,  rate: 1.0,  language: "en-US" },
+  { id: "girl",        label: "Girl",       icon: "🎀",  iconType: "flag", color: "#EC4899", pitch: 1.6,  rate: 1.1,  language: "en-US" },
+  { id: "human",       label: "Human",      icon: "✨",  iconType: "flag", color: "#0EA5E9", pitch: 1.0,  rate: 1.0,  language: "en-US" },
+  { id: "boy",         label: "Boy",        icon: "⚡",  iconType: "flag", color: "#6366F1", pitch: 1.4,  rate: 1.05, language: "en-US" },
+  { id: "american",    label: "American",   icon: "🇺🇸", iconType: "flag", color: "#3B82F6", pitch: 1.0,  rate: 1.0,  language: "en-US" },
+  { id: "british",     label: "British",    icon: "🇬🇧", iconType: "flag", color: "#EF4444", pitch: 1.0,  rate: 0.9,  language: "en-GB" },
+  { id: "indian",      label: "Indian",     icon: "🇮🇳", iconType: "flag", color: "#F97316", pitch: 1.0,  rate: 0.85, language: "en-IN" },
+  { id: "australian",  label: "Australian", icon: "🇦🇺", iconType: "flag", color: "#10B981", pitch: 1.0,  rate: 1.0,  language: "en-AU" },
+  { id: "storyteller", label: "Story",      icon: "📖",  iconType: "flag", color: "#92400E", pitch: 1.15, rate: 0.75, language: "en-US" },
 ];
 
-const SPEED_OPTIONS = ["1", "1.5", "2"] as const;
+const SPEED_OPTIONS = ["0.25", "0.5", "0.75", "1", "1.5", "2"] as const;
 type SpeedOption = typeof SPEED_OPTIONS[number];
 
 function wordWeight(word: string): number {
@@ -123,7 +137,7 @@ function calcWordTimestamps(words: string[], speed: SpeedOption, durationMs?: nu
   }
 
   // Fallback: WPM estimate
-  const wpm = speed === "2" ? 260 : speed === "1.5" ? 185 : 130;
+  const wpm = speed === "2" ? 260 : speed === "1.5" ? 185 : speed === "0.75" ? 98 : speed === "0.5" ? 65 : speed === "0.25" ? 32 : 130;
   const avgMs = 60000 / wpm;
   let t = startupMs;
   for (const word of words) {
@@ -139,6 +153,13 @@ function LessonPlayerScreen(): React.ReactElement {
   const router = useRouter();
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const { user } = useAuthStore();
+
+  // Stop audio whenever this screen loses focus (e.g. user taps Home tab)
+  useFocusEffect(
+    useCallback(() => {
+      return () => { void stopModuleAudio(); };
+    }, [])
+  );
 
   // ── step state ────────────────────────────────────────────────────────────
   const [step, setStep] = useState<LessonStep>("listen");
@@ -418,6 +439,7 @@ function ListenStep({ lesson, level, onComplete }: ListenStepProps) {
         return;
       }
       soundRef.current = sound;
+      _activeSound = sound; // track for focus-based cleanup
       // Get actual audio duration for accurate word timing
       const loadedStatus = await sound.getStatusAsync();
       const durationMs = loadedStatus.isLoaded ? (loadedStatus.durationMillis ?? undefined) : undefined;
@@ -1386,6 +1408,10 @@ function FeedbackStep({
           result.difficultWords,
           result.pronunciationTip
         );
+        // Invalidate topics/progress cache so counts update immediately
+        void queryClient.invalidateQueries({ queryKey: ["topics"] });
+        void queryClient.invalidateQueries({ queryKey: ["topic"] });
+        void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       } catch (err) {
         setError("Could not load feedback. Please try again.");
       } finally {
@@ -2257,11 +2283,12 @@ const styles = StyleSheet.create({
   },
   speedButtons: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 6,
   },
   speedBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: borderRadius.full,
     borderWidth: 1.5,
     borderColor: colors.border,
