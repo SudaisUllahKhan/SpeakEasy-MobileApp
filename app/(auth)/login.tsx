@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   TouchableOpacity,
   Alert,
@@ -30,6 +31,9 @@ export default function LoginScreen(): React.ReactElement {
   const [isAppleLoading, setAppleLoading] = useState(false);
   const [isDevLoading, setDevLoading] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
+  const [email, setEmail] = useState("");
+  const [isMagicLoading, setMagicLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   useEffect(() => {
     AppleAuthentication.isAvailableAsync()
@@ -41,15 +45,10 @@ export default function LoginScreen(): React.ReactElement {
     Keyboard.dismiss();
     setGoogleLoading(true);
     try {
-      // In Expo Go: exp://localhost:8090/--/auth/callback
-      // In standalone: speakeasy://auth/callback
       const mobileRedirect = Linking.createURL("auth/callback");
       const googleUrl = await getGoogleAuthUrl(mobileRedirect);
-
       const result = await WebBrowser.openAuthSessionAsync(googleUrl, mobileRedirect);
-
       if (result.type === "success" && result.url) {
-        // iOS: openAuthSessionAsync intercepts the redirect and returns it here
         const parsed = new URL(result.url);
         const sessionToken =
           parsed.searchParams.get("sessionToken") ??
@@ -61,9 +60,6 @@ export default function LoginScreen(): React.ReactElement {
           Alert.alert("Sign In Error", "Could not complete Google sign-in. Please try again.");
         }
       }
-      // On Android, result.type is "cancel"/"dismiss" because Chrome Custom Tab fires
-      // an Android intent for the deep link instead of returning here.
-      // auth/callback.tsx handles that case via the Linking deep-link route.
     } catch {
       Alert.alert("Sign In Error", "Google sign-in is not available right now. Please try again.");
     } finally {
@@ -101,17 +97,55 @@ export default function LoginScreen(): React.ReactElement {
 
       const data = (await res.json()) as { sessionToken?: string; error?: string };
       if (!data.sessionToken) throw new Error(data.error ?? "Apple sign-in failed");
-
       await setToken(data.sessionToken);
       router.replace("/(app)/dashboard");
     } catch (err: unknown) {
-      // User cancelled — Apple throws error code 1001
       if (err instanceof Error && "code" in err && (err as { code: string }).code === "ERR_REQUEST_CANCELED") {
         return;
       }
       Alert.alert("Sign In Error", err instanceof Error ? err.message : "Apple sign-in failed. Please try again.");
     } finally {
       setAppleLoading(false);
+    }
+  };
+
+  const handleMagicLink = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail || !trimmedEmail.includes("@")) {
+      Alert.alert("Invalid Email", "Please enter a valid email address.");
+      return;
+    }
+    Keyboard.dismiss();
+    setMagicLoading(true);
+    try {
+      // NextAuth requires a CSRF token for email sign-in
+      const csrfRes = await fetch(`${API_URL}/api/auth/csrf`);
+      const { csrfToken } = (await csrfRes.json()) as { csrfToken: string };
+
+      // POST to NextAuth email sign-in; callbackUrl points to the mobile-token
+      // bridge that converts the web session cookie into a deep-link token.
+      const body = new URLSearchParams({
+        email: trimmedEmail,
+        csrfToken,
+        callbackUrl: `${API_URL}/api/auth/mobile-token`,
+        json: "true",
+      });
+
+      const res = await fetch(`${API_URL}/api/auth/signin/email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+      });
+
+      if (res.ok) {
+        setEmailSent(true);
+      } else {
+        throw new Error(`Server error ${res.status}`);
+      }
+    } catch {
+      Alert.alert("Error", "Could not send the magic link. Please check your connection and try again.");
+    } finally {
+      setMagicLoading(false);
     }
   };
 
@@ -137,6 +171,41 @@ export default function LoginScreen(): React.ReactElement {
     }
   };
 
+  // ── Email-sent confirmation screen ────────────────────────────────────────
+  if (emailSent) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.content}>
+          <View style={styles.hero}>
+            <View style={styles.logoContainer}>
+              <Ionicons name="mail-open" size={40} color={colors.white} />
+            </View>
+            <Text style={styles.appName}>Check your inbox</Text>
+            <Text style={styles.tagline}>Magic link sent to{"\n"}{email}</Text>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Link on its way!</Text>
+            <Text style={styles.cardSubtitle}>
+              Open the email from SpeakEasy and tap the sign-in button. It will open the app and sign you in automatically.
+            </Text>
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={() => { setEmailSent(false); setEmail(""); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="arrow-back" size={20} color={colors.primary} />
+              <Text style={[styles.googleButtonText, { color: colors.primary }]}>
+                Use a different email
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Main login screen ─────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -154,7 +223,7 @@ export default function LoginScreen(): React.ReactElement {
           <Text style={styles.cardTitle}>Welcome</Text>
           <Text style={styles.cardSubtitle}>Sign in to continue your learning journey</Text>
 
-          {/* Google Button */}
+          {/* Google */}
           <TouchableOpacity
             style={[styles.googleButton, isGoogleLoading && styles.disabledButton]}
             onPress={handleGoogleSignIn}
@@ -172,6 +241,7 @@ export default function LoginScreen(): React.ReactElement {
             </Text>
           </TouchableOpacity>
 
+          {/* Apple (iOS only) */}
           {appleAvailable && (
             <AppleAuthentication.AppleAuthenticationButton
               buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
@@ -181,6 +251,45 @@ export default function LoginScreen(): React.ReactElement {
               onPress={handleAppleSignIn}
             />
           )}
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Magic Link */}
+          <TextInput
+            style={styles.emailInput}
+            placeholder="Enter your email"
+            placeholderTextColor={colors.muted}
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="send"
+            onSubmitEditing={handleMagicLink}
+          />
+          <TouchableOpacity
+            style={[
+              styles.magicLinkButton,
+              (isMagicLoading || !email.trim()) && styles.disabledButton,
+            ]}
+            onPress={handleMagicLink}
+            disabled={isMagicLoading || !email.trim()}
+            activeOpacity={0.8}
+          >
+            {isMagicLoading ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <Ionicons name="mail" size={20} color={colors.white} />
+            )}
+            <Text style={styles.magicLinkButtonText}>
+              {isMagicLoading ? "Sending link..." : "Continue with Email"}
+            </Text>
+          </TouchableOpacity>
 
           <Text style={styles.terms}>
             By signing in, you agree to our Terms of Service and Privacy Policy.
@@ -289,6 +398,48 @@ const styles = StyleSheet.create({
   appleButton: {
     height: 50,
     marginBottom: spacing.md,
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: spacing.sm,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    paddingHorizontal: 12,
+    fontSize: fontSize.sm,
+    color: colors.muted,
+  },
+  emailInput: {
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: fontSize.base,
+    color: colors.text,
+    backgroundColor: "#F9FAFB",
+    marginBottom: spacing.sm,
+  },
+  magicLinkButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    gap: 10,
+    marginBottom: spacing.md,
+  },
+  magicLinkButtonText: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    color: colors.white,
   },
   terms: {
     fontSize: fontSize.xs,
