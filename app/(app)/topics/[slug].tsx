@@ -8,7 +8,8 @@ import {
   RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
@@ -48,6 +49,13 @@ export default function TopicDetailScreen(): React.ReactElement {
     queryFn: () => getTopicLessons(slug!),
     enabled: !!slug,
   });
+
+  // Refetch every time the screen gains focus so lesson lock status stays fresh
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch])
+  );
 
   if (isLoading) {
     return <LoadingSpinner fullScreen label="Loading lessons..." />;

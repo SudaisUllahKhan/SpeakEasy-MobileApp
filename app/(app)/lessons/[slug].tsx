@@ -98,15 +98,15 @@ interface VoicePreset {
 }
 
 const VOICE_PRESETS: VoicePreset[] = [
-  { id: "female",      label: "Female",     icon: "🌸",  iconType: "flag", color: "#7C3AED", pitch: 1.0,  rate: 1.0,  language: "en-US" },
-  { id: "girl",        label: "Girl",       icon: "🎀",  iconType: "flag", color: "#EC4899", pitch: 1.6,  rate: 1.1,  language: "en-US" },
-  { id: "human",       label: "Human",      icon: "✨",  iconType: "flag", color: "#0EA5E9", pitch: 1.0,  rate: 1.0,  language: "en-US" },
-  { id: "boy",         label: "Boy",        icon: "⚡",  iconType: "flag", color: "#6366F1", pitch: 1.4,  rate: 1.05, language: "en-US" },
+  { id: "female",      label: "Female",     icon: "🌝",  iconType: "flag", color: "#7C3AED", pitch: 1.0,  rate: 1.0,  language: "en-US" },
+  { id: "girl",        label: "Girl",       icon: "🌛",  iconType: "flag", color: "#EC4899", pitch: 1.6,  rate: 1.1,  language: "en-US" },
+  { id: "human",       label: "Human",      icon: "🌚",  iconType: "flag", color: "#0EA5E9", pitch: 1.0,  rate: 1.0,  language: "en-US" },
+  { id: "boy",         label: "Boy",        icon: "🌞",  iconType: "flag", color: "#6366F1", pitch: 1.4,  rate: 1.05, language: "en-US" },
   { id: "american",    label: "American",   icon: "🇺🇸", iconType: "flag", color: "#3B82F6", pitch: 1.0,  rate: 1.0,  language: "en-US" },
   { id: "british",     label: "British",    icon: "🇬🇧", iconType: "flag", color: "#EF4444", pitch: 1.0,  rate: 0.9,  language: "en-GB" },
   { id: "indian",      label: "Indian",     icon: "🇮🇳", iconType: "flag", color: "#F97316", pitch: 1.0,  rate: 0.85, language: "en-IN" },
   { id: "australian",  label: "Australian", icon: "🇦🇺", iconType: "flag", color: "#10B981", pitch: 1.0,  rate: 1.0,  language: "en-AU" },
-  { id: "storyteller", label: "Story",      icon: "📖",  iconType: "flag", color: "#92400E", pitch: 1.15, rate: 0.75, language: "en-US" },
+  { id: "storyteller", label: "Story",      icon: "🎭",  iconType: "flag", color: "#92400E", pitch: 1.15, rate: 0.75, language: "en-US" },
 ];
 
 const SPEED_OPTIONS = ["0.25", "0.5", "0.75", "1", "1.5", "2"] as const;
