@@ -27,7 +27,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#7C3AED"
+        "backgroundColor": "#FFFFFF"
       },
       "package": "ai.innov8ive.speakeasy",
       "permissions": [

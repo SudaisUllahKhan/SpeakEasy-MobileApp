@@ -181,7 +181,7 @@ export default function DashboardScreen(): React.ReactElement {
         <Card style={styles.quoteCard}>
           <View style={styles.quoteContent}>
             <Ionicons
-              name="chatbubble-ellipses-outline"
+              name="sparkles-outline"
               size={20}
               color={colors.primary}
               style={styles.quoteIcon}

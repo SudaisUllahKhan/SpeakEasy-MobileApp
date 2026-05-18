@@ -5,89 +5,56 @@ Add-Type -AssemblyName System.Drawing
 $W = 1024; $H = 1024
 $bmp = New-Object System.Drawing.Bitmap($W, $H)
 $g   = [System.Drawing.Graphics]::FromImage($bmp)
-$g.SmoothingMode       = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-$g.InterpolationMode   = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-$g.PixelOffsetMode     = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-$g.CompositingQuality  = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+$g.SmoothingMode      = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+$g.InterpolationMode  = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+$g.PixelOffsetMode    = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+$g.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
 
-# ── White background ───────────────────────────────────────────────────────────
+$purple = [System.Drawing.Color]::FromArgb(124, 58, 237)   # #7C3AED
+
+# White canvas
 $g.Clear([System.Drawing.Color]::White)
 
-# ── Soft lavender glow (bottom-right, like Teams' background gradient) ─────────
-$lavenderBrush = New-Object System.Drawing.SolidBrush(
-    [System.Drawing.Color]::FromArgb(55, 167, 139, 250))
-$g.FillEllipse($lavenderBrush, 480, 430, 680, 680)
-$lavenderBrush.Dispose()
-
-# ── Helper: filled rounded rectangle ──────────────────────────────────────────
 function Fill-RoundedRect($g, $brush, $x, $y, $w, $h, $r) {
     $p = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $p.AddArc($x,           $y,           $r*2, $r*2, 180, 90)
-    $p.AddArc($x+$w-$r*2,  $y,           $r*2, $r*2, 270, 90)
-    $p.AddArc($x+$w-$r*2,  $y+$h-$r*2,  $r*2, $r*2,   0, 90)
-    $p.AddArc($x,           $y+$h-$r*2,  $r*2, $r*2,  90, 90)
+    $p.AddArc($x,          $y,          $r*2, $r*2, 180, 90)
+    $p.AddArc($x+$w-$r*2,  $y,          $r*2, $r*2, 270, 90)
+    $p.AddArc($x+$w-$r*2,  $y+$h-$r*2, $r*2, $r*2,   0, 90)
+    $p.AddArc($x,          $y+$h-$r*2, $r*2, $r*2,  90, 90)
     $p.CloseAllFigures()
     $g.FillPath($brush, $p)
     $p.Dispose()
 }
 
-# ── Helper: pill-shaped bar (rounded on both ends) ─────────────────────────────
-function Fill-PillBar($g, $brush, $x, $y, $w, $h) {
-    $r = $w / 2
-    $p = New-Object System.Drawing.Drawing2D.GraphicsPath
-    # top cap: counter-clockwise arc from leftmost to rightmost = upward arc
-    $p.AddArc($x, $y, $w, $w, 180, 180)
-    # right side
-    $p.AddLine([float]($x+$w), [float]($y+$r), [float]($x+$w), [float]($y+$h-$r))
-    # bottom cap: clockwise arc from rightmost to leftmost = downward arc
-    $p.AddArc($x, $y+$h-$w, $w, $w, 0, 180)
-    # left side
-    $p.AddLine([float]$x, [float]($y+$h-$r), [float]$x, [float]($y+$r))
-    $p.CloseAllFigures()
-    $g.FillPath($brush, $p)
-    $p.Dispose()
-}
-
-# ── Speech bubble (purple) ─────────────────────────────────────────────────────
-$purple = [System.Drawing.Color]::FromArgb(124, 58, 237)   # #7C3AED
+# Purple rounded rectangle — 864x864 centered, r=200 (Teams-style card shape)
 $purpleBrush = New-Object System.Drawing.SolidBrush($purple)
-
-# Bubble body: 720 × 480, centered around (500, 405)
-$bx = 140; $by = 165; $bw = 720; $bh = 480; $br = 85
-Fill-RoundedRect $g $purpleBrush $bx $by $bw $bh $br
-
-# Bubble tail: triangle pointing down-left
-$tail = [System.Drawing.PointF[]]@(
-    [System.Drawing.PointF]::new(240, 645),
-    [System.Drawing.PointF]::new(410, 645),
-    [System.Drawing.PointF]::new(205, 820)
-)
-$g.FillPolygon($purpleBrush, $tail)
+Fill-RoundedRect $g $purpleBrush 80 80 864 864 200
 $purpleBrush.Dispose()
 
-# ── Sound wave bars (white, inside bubble) ────────────────────────────────────
+# White "SE" — Bold Italic for a stylish slanted monogram
+$path   = New-Object System.Drawing.Drawing2D.GraphicsPath
+$family = New-Object System.Drawing.FontFamily("Segoe UI")
+$style  = [int]([System.Drawing.FontStyle]::Bold -bor [System.Drawing.FontStyle]::Italic)
+$format = [System.Drawing.StringFormat]::GenericTypographic
+
+$path.AddString("SE", $family, $style, 600.0, [System.Drawing.PointF]::new(0, 0), $format)
+
+# Scale to 62% of purple box, center inside it
+$b       = $path.GetBounds()
+$boxW = 864; $boxH = 864; $boxX = 80; $boxY = 80
+$scale   = [Math]::Min(($boxW * 0.62) / $b.Width, ($boxH * 0.62) / $b.Height)
+$offsetX = $boxX + ($boxW - $b.Width  * $scale) / 2.0 - $b.X * $scale
+$offsetY = $boxY + ($boxH - $b.Height * $scale) / 2.0 - $b.Y * $scale
+
+$xform = New-Object System.Drawing.Drawing2D.Matrix($scale, 0.0, 0.0, $scale, $offsetX, $offsetY)
+$path.Transform($xform)
+
 $whiteBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-$barW  = 60
-$midY  = 405   # vertical center of bubble
-# 5 bars: outer short, inner tall, centre tallest
-$bars = @(
-    @{ h = 130; xOff =   0 },
-    @{ h = 215; xOff = 100 },
-    @{ h = 285; xOff = 200 },
-    @{ h = 215; xOff = 300 },
-    @{ h = 130; xOff = 400 }
-)
-# total span = 4 gaps of 40 + 5 bars of 60 = 460; centre = 500
-$startX = 500 - 460/2   # = 270
-
-foreach ($b in $bars) {
-    $bx2 = $startX + $b.xOff
-    $by2 = $midY - $b.h / 2
-    Fill-PillBar $g $whiteBrush $bx2 $by2 $barW $b.h
-}
+$g.FillPath($whiteBrush, $path)
 $whiteBrush.Dispose()
+$path.Dispose()
+$family.Dispose()
 
-# ── Save ──────────────────────────────────────────────────────────────────────
 $g.Dispose()
 $dir = Split-Path $Out -Parent
 if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }

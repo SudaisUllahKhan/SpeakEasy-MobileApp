@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   TouchableOpacity,
   Alert,
@@ -31,9 +30,6 @@ export default function LoginScreen(): React.ReactElement {
   const [isAppleLoading, setAppleLoading] = useState(false);
   const [isDevLoading, setDevLoading] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
-  const [email, setEmail] = useState("");
-  const [isMagicLoading, setMagicLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
 
   useEffect(() => {
     AppleAuthentication.isAvailableAsync()
@@ -109,46 +105,6 @@ export default function LoginScreen(): React.ReactElement {
     }
   };
 
-  const handleMagicLink = async () => {
-    const trimmedEmail = email.trim().toLowerCase();
-    if (!trimmedEmail || !trimmedEmail.includes("@")) {
-      Alert.alert("Invalid Email", "Please enter a valid email address.");
-      return;
-    }
-    Keyboard.dismiss();
-    setMagicLoading(true);
-    try {
-      // NextAuth requires a CSRF token for email sign-in
-      const csrfRes = await fetch(`${API_URL}/api/auth/csrf`);
-      const { csrfToken } = (await csrfRes.json()) as { csrfToken: string };
-
-      // POST to NextAuth email sign-in; callbackUrl points to the mobile-token
-      // bridge that converts the web session cookie into a deep-link token.
-      const body = new URLSearchParams({
-        email: trimmedEmail,
-        csrfToken,
-        callbackUrl: `${API_URL}/api/auth/mobile-token`,
-        json: "true",
-      });
-
-      const res = await fetch(`${API_URL}/api/auth/signin/email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: body.toString(),
-      });
-
-      if (res.ok) {
-        setEmailSent(true);
-      } else {
-        throw new Error(`Server error ${res.status}`);
-      }
-    } catch {
-      Alert.alert("Error", "Could not send the magic link. Please check your connection and try again.");
-    } finally {
-      setMagicLoading(false);
-    }
-  };
-
   const handleDevLogin = async () => {
     Keyboard.dismiss();
     setDevLoading(true);
@@ -170,40 +126,6 @@ export default function LoginScreen(): React.ReactElement {
       setDevLoading(false);
     }
   };
-
-  // ── Email-sent confirmation screen ────────────────────────────────────────
-  if (emailSent) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.content}>
-          <View style={styles.hero}>
-            <View style={styles.logoContainer}>
-              <Ionicons name="mail-open" size={40} color={colors.white} />
-            </View>
-            <Text style={styles.appName}>Check your inbox</Text>
-            <Text style={styles.tagline}>Magic link sent to{"\n"}{email}</Text>
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Link on its way!</Text>
-            <Text style={styles.cardSubtitle}>
-              Open the email from SpeakEasy and tap the sign-in button. It will open the app and sign you in automatically.
-            </Text>
-            <TouchableOpacity
-              style={styles.googleButton}
-              onPress={() => { setEmailSent(false); setEmail(""); }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="arrow-back" size={20} color={colors.primary} />
-              <Text style={[styles.googleButtonText, { color: colors.primary }]}>
-                Use a different email
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   // ── Main login screen ─────────────────────────────────────────────────────
   return (
@@ -251,45 +173,6 @@ export default function LoginScreen(): React.ReactElement {
               onPress={handleAppleSignIn}
             />
           )}
-
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Magic Link */}
-          <TextInput
-            style={styles.emailInput}
-            placeholder="Enter your email"
-            placeholderTextColor={colors.muted}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="send"
-            onSubmitEditing={handleMagicLink}
-          />
-          <TouchableOpacity
-            style={[
-              styles.magicLinkButton,
-              (isMagicLoading || !email.trim()) && styles.disabledButton,
-            ]}
-            onPress={handleMagicLink}
-            disabled={isMagicLoading || !email.trim()}
-            activeOpacity={0.8}
-          >
-            {isMagicLoading ? (
-              <ActivityIndicator size="small" color={colors.white} />
-            ) : (
-              <Ionicons name="mail" size={20} color={colors.white} />
-            )}
-            <Text style={styles.magicLinkButtonText}>
-              {isMagicLoading ? "Sending link..." : "Continue with Email"}
-            </Text>
-          </TouchableOpacity>
 
           <Text style={styles.terms}>
             By signing in, you agree to our Terms of Service and Privacy Policy.
@@ -398,48 +281,6 @@ const styles = StyleSheet.create({
   appleButton: {
     height: 50,
     marginBottom: spacing.md,
-  },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: spacing.sm,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  dividerText: {
-    paddingHorizontal: 12,
-    fontSize: fontSize.sm,
-    color: colors.muted,
-  },
-  emailInput: {
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: borderRadius.md,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    fontSize: fontSize.base,
-    color: colors.text,
-    backgroundColor: "#F9FAFB",
-    marginBottom: spacing.sm,
-  },
-  magicLinkButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    gap: 10,
-    marginBottom: spacing.md,
-  },
-  magicLinkButtonText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    color: colors.white,
   },
   terms: {
     fontSize: fontSize.xs,

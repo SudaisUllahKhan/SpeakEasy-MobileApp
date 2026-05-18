@@ -98,10 +98,9 @@ interface VoicePreset {
 }
 
 const VOICE_PRESETS: VoicePreset[] = [
-  { id: "female",      label: "Female",     icon: "🌝",  iconType: "flag", color: "#7C3AED", pitch: 1.0,  rate: 1.0,  language: "en-US" },
-  { id: "girl",        label: "Girl",       icon: "🌛",  iconType: "flag", color: "#EC4899", pitch: 1.6,  rate: 1.1,  language: "en-US" },
-  { id: "human",       label: "Human",      icon: "🌚",  iconType: "flag", color: "#0EA5E9", pitch: 1.0,  rate: 1.0,  language: "en-US" },
-  { id: "boy",         label: "Boy",        icon: "🌞",  iconType: "flag", color: "#6366F1", pitch: 1.4,  rate: 1.05, language: "en-US" },
+  { id: "female",      label: "Female",     icon: "person-circle",         iconType: "ionicon", color: "#7C3AED", pitch: 1.0,  rate: 1.0,  language: "en-US" },
+  { id: "girl",        label: "Girl",       icon: "happy-outline",         iconType: "ionicon", color: "#EC4899", pitch: 1.6,  rate: 1.1,  language: "en-US" },
+  { id: "human",       label: "Human",      icon: "people-outline",        iconType: "ionicon", color: "#0EA5E9", pitch: 1.0,  rate: 1.0,  language: "en-US" },
   { id: "american",    label: "American",   icon: "🇺🇸", iconType: "flag", color: "#3B82F6", pitch: 1.0,  rate: 1.0,  language: "en-US" },
   { id: "british",     label: "British",    icon: "🇬🇧", iconType: "flag", color: "#EF4444", pitch: 1.0,  rate: 0.9,  language: "en-GB" },
   { id: "indian",      label: "Indian",     icon: "🇮🇳", iconType: "flag", color: "#F97316", pitch: 1.0,  rate: 0.85, language: "en-IN" },
@@ -738,7 +737,7 @@ function ReadAloudStep({ lesson, level, user, onComplete }: ReadAloudStepProps) 
       Speech.speak(lesson.passageText, {
         language: voice.language,
         pitch: voice.pitch,
-        rate: voice.rate,
+        rate: voice.rate * parseFloat(spd),
         onDone: () => setIsListening(false),
         onError: () => setIsListening(false),
         onStopped: () => setIsListening(false),
