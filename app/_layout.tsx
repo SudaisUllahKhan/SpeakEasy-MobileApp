@@ -127,7 +127,7 @@ function RootLayout(): React.ReactElement | null {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <QueryClientProvider client={queryClient}>
-            <StatusBar style="light" />
+            <StatusBar style="dark" />
             <AppContent />
           </QueryClientProvider>
         </SafeAreaProvider>

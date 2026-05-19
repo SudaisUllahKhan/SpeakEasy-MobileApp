@@ -59,7 +59,10 @@ export default function DashboardScreen(): React.ReactElement {
 
   const greeting = getGreeting();
   const quote = getDailyQuote();
-  const firstName = user?.name?.split(" ")[0] ?? "there";
+  const rawName = user?.name?.trim();
+  const firstName = rawName
+    ? rawName.split(" ")[0]
+    : (user?.email?.split("@")[0] ?? "");
 
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -109,7 +112,7 @@ export default function DashboardScreen(): React.ReactElement {
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>
-              {greeting}, {firstName}
+              {greeting}{firstName ? `, ${firstName}` : ""}
             </Text>
             <Text style={styles.greetingSubtitle}>
               Ready to practice today?
