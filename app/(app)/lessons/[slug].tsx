@@ -425,7 +425,9 @@ function ListenStep({ lesson, level, onComplete }: ListenStepProps) {
     try {
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false, staysActiveInBackground: true, shouldDuckAndroid: false });
       const encodedText = encodeURIComponent(lesson.passageText);
-      const uri = `${API_URL}/api/tts?voiceId=${voiceId}&text=${encodedText}&speed=${spd}`;
+      // Always fetch 1x audio — client-side rate control is more reliable across
+      // all speeds than asking the TTS server to vary tempo.
+      const uri = `${API_URL}/api/tts?voiceId=${voiceId}&text=${encodedText}`;
       const { sound } = await Audio.Sound.createAsync(
         { uri },
         { shouldPlay: false },
@@ -439,9 +441,13 @@ function ListenStep({ lesson, level, onComplete }: ListenStepProps) {
       }
       soundRef.current = sound;
       _activeSound = sound; // track for focus-based cleanup
-      // Get actual audio duration for accurate word timing
+      // Apply playback rate on the client so voice and highlight are always in sync.
+      const rateMultiplier = parseFloat(spd);
+      await sound.setRateAsync(rateMultiplier, true).catch(() => {});
+      // Get 1x audio duration then scale by rate to get effective playback duration.
       const loadedStatus = await sound.getStatusAsync();
-      const durationMs = loadedStatus.isLoaded ? (loadedStatus.durationMillis ?? undefined) : undefined;
+      const baseDurationMs = loadedStatus.isLoaded ? (loadedStatus.durationMillis ?? undefined) : undefined;
+      const durationMs = baseDurationMs !== undefined ? baseDurationMs / rateMultiplier : undefined;
       const wordTimestamps = calcWordTimestamps(passageWords, spd, durationMs);
       // Fire status updates every 80ms for smooth highlight tracking
       await sound.setStatusAsync({ progressUpdateIntervalMillis: 80 });
@@ -710,7 +716,7 @@ function ReadAloudStep({ lesson, level, user, onComplete }: ReadAloudStepProps) 
     try {
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false, staysActiveInBackground: true, shouldDuckAndroid: false });
       const encodedText = encodeURIComponent(lesson.passageText);
-      const uri = `${API_URL}/api/tts?voiceId=${id}&text=${encodedText}&speed=${spd}`;
+      const uri = `${API_URL}/api/tts?voiceId=${id}&text=${encodedText}`;
       const { sound } = await Audio.Sound.createAsync(
         { uri },
         { shouldPlay: false },
@@ -723,6 +729,7 @@ function ReadAloudStep({ lesson, level, user, onComplete }: ReadAloudStepProps) 
         return;
       }
       listenSoundRef.current = sound;
+      await sound.setRateAsync(parseFloat(spd), true).catch(() => {});
       await sound.playAsync();
       sound.setOnPlaybackStatusUpdate((status) => {
         if (status.isLoaded && status.didJustFinish) {
