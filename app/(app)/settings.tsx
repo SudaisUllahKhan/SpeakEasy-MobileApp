@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
-import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { SettingsSkeleton } from "@/components/ui/SkeletonLoader";
 import { getUserSettings, saveSettings, deleteAccount } from "@/lib/api";
 import { useAuthStore } from "@/lib/authStore";
 import { colors, fontSize, fontWeight, borderRadius, spacing } from "@/lib/theme";
@@ -161,7 +161,7 @@ export default function SettingsScreen(): React.ReactElement {
   const avatarLetter = (name || settings?.email || "?")[0].toUpperCase();
   const displayEmail = settings?.email ?? user?.email ?? "";
 
-  if (isLoading) return <LoadingSpinner fullScreen label="Loading settings..." />;
+  if (isLoading) return <SettingsSkeleton />;
 
   return (
     <SafeAreaView style={styles.container}>

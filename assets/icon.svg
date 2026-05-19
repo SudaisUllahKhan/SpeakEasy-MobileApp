@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- White background -->
+  <rect width="1024" height="1024" fill="#FFFFFF"/>
+  <!-- Purple rounded rectangle -->
+  <rect x="80" y="80" width="864" height="864" rx="200" ry="200" fill="#7C3AED"/>
+  <!-- SE monogram — bold italic, white, centered in purple box -->
+  <text
+    x="512"
+    y="660"
+    font-family="Arial Black, Arial, Helvetica, sans-serif"
+    font-size="530"
+    font-weight="900"
+    font-style="italic"
+    fill="#FFFFFF"
+    text-anchor="middle"
+    dominant-baseline="auto"
+    letter-spacing="-20"
+  >SE</text>
+</svg>

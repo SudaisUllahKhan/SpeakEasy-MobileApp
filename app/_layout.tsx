@@ -8,7 +8,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useAuthStore } from "@/lib/authStore";
 import { queryClient } from "@/lib/queryClient";
-import { getDashboard, getTopics } from "@/lib/api";
+import { getDashboard, getTopics, getProgress, getUserSettings } from "@/lib/api";
 
 // Keep splash screen visible while loading auth
 SplashScreen.preventAutoHideAsync();
@@ -94,6 +94,8 @@ function AppContent(): React.ReactElement {
       if (user) {
         queryClient.prefetchQuery({ queryKey: ["dashboard"], queryFn: getDashboard });
         queryClient.prefetchQuery({ queryKey: ["topics"], queryFn: getTopics });
+        queryClient.prefetchQuery({ queryKey: ["progress"], queryFn: getProgress });
+        queryClient.prefetchQuery({ queryKey: ["user-settings"], queryFn: getUserSettings });
       }
     });
   }, [loadFromStorage]);

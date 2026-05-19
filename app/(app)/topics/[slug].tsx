@@ -12,7 +12,7 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
-import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { TopicDetailSkeleton } from "@/components/ui/SkeletonLoader";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { getTopicLessons } from "@/lib/api";
@@ -58,7 +58,7 @@ export default function TopicDetailScreen(): React.ReactElement {
   );
 
   if (isLoading) {
-    return <LoadingSpinner fullScreen label="Loading lessons..." />;
+    return <TopicDetailSkeleton />;
   }
 
   if (isError || !data) {

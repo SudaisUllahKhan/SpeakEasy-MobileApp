@@ -11,7 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import { Card } from "@/components/ui/Card";
 import { ScoreBar } from "@/components/ui/ScoreBar";
-import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { ProgressSkeleton } from "@/components/ui/SkeletonLoader";
 import { Button } from "@/components/ui/Button";
 import { getProgress } from "@/lib/api";
 import { useAuthStore } from "@/lib/authStore";
@@ -47,7 +47,7 @@ export default function ProgressScreen(): React.ReactElement {
   });
 
   if (isLoading) {
-    return <LoadingSpinner fullScreen label="Loading progress..." />;
+    return <ProgressSkeleton />;
   }
 
   if (isError || !data) {

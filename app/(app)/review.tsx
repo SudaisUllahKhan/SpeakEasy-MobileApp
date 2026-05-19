@@ -10,7 +10,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 import * as Speech from "expo-speech";
-import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { ReviewSkeleton } from "@/components/ui/SkeletonLoader";
 import { Button } from "@/components/ui/Button";
 import { getReviewWords, submitReviewResult } from "@/lib/api";
 import { useAuthStore } from "@/lib/authStore";
@@ -64,7 +64,7 @@ export default function ReviewScreen(): React.ReactElement {
     void refetch();
   };
 
-  if (isLoading) return <LoadingSpinner fullScreen label="Loading review words..." />;
+  if (isLoading) return <ReviewSkeleton />;
 
   if (isError) {
     return (
