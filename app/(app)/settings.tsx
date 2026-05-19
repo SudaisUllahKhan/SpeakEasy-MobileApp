@@ -124,6 +124,7 @@ export default function SettingsScreen(): React.ReactElement {
   const deleteMutation = useMutation({
     mutationFn: deleteAccount,
     onSuccess: async () => {
+      queryClient.clear();
       await logout();
       router.replace("/(auth)/login");
     },
@@ -137,6 +138,7 @@ export default function SettingsScreen(): React.ReactElement {
         text: "Sign out",
         style: "destructive",
         onPress: async () => {
+          queryClient.clear();
           await logout();
           router.replace("/(auth)/login");
         },

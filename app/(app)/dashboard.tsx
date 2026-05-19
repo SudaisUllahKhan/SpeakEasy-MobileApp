@@ -15,7 +15,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ProgressRing } from "@/components/ui/ProgressRing";
-import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { DashboardSkeleton } from "@/components/ui/SkeletonLoader";
 import { getDashboard } from "@/lib/api";
 import { useAuthStore } from "@/lib/authStore";
 import {
@@ -62,7 +62,7 @@ export default function DashboardScreen(): React.ReactElement {
   const firstName = user?.name?.split(" ")[0] ?? "there";
 
   if (isLoading) {
-    return <LoadingSpinner fullScreen label="Loading dashboard..." />;
+    return <DashboardSkeleton />;
   }
 
   if (isError || !data) {

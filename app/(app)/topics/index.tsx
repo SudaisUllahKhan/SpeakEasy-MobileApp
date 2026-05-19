@@ -11,7 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
-import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { TopicsSkeleton } from "@/components/ui/SkeletonLoader";
 import { Button } from "@/components/ui/Button";
 import { getTopics } from "@/lib/api";
 import {
@@ -47,7 +47,7 @@ export default function TopicsScreen(): React.ReactElement {
   });
 
   if (isLoading) {
-    return <LoadingSpinner fullScreen label="Loading topics..." />;
+    return <TopicsSkeleton />;
   }
 
   if (isError || !topics) {
