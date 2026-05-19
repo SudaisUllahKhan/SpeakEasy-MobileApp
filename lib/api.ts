@@ -158,6 +158,18 @@ export async function getGoogleAuthUrl(mobileRedirect: string): Promise<string> 
   return `${API_URL}/google-auth?mobileRedirect=${encodeURIComponent(mobileRedirect)}`;
 }
 
+export async function mobileSignout(sessionToken: string): Promise<void> {
+  try {
+    await fetch(`${API_URL}/api/auth/mobile-signout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionToken }),
+    });
+  } catch {
+    // Non-fatal — local state is cleared regardless
+  }
+}
+
 // ─── User ─────────────────────────────────────────────────────────────────────
 
 export async function getUserSettings(): Promise<UserSettings> {

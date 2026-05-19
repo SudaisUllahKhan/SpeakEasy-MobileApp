@@ -111,6 +111,12 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   logout: async () => {
+    const currentToken = get().token;
+    // Kill the server-side session so Chrome Custom Tabs' shared cookie
+    // doesn't return the old user's token on the next Google OAuth flow.
+    if (currentToken) {
+      void import("./api").then(({ mobileSignout }) => mobileSignout(currentToken));
+    }
     try {
       await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
     } catch (err) {
