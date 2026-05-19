@@ -6,9 +6,17 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as SplashScreen from "expo-splash-screen";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import * as Sentry from "@sentry/react-native";
 import { useAuthStore } from "@/lib/authStore";
 import { queryClient } from "@/lib/queryClient";
 import { getDashboard, getTopics, getProgress, getUserSettings } from "@/lib/api";
+
+Sentry.init({
+  dsn: "https://74b74b8988bbb8cca1f014cc83e07d8f@o4511417951518720.ingest.us.sentry.io/4511417958793216",
+  environment: process.env.APP_ENV ?? "development",
+  tracesSampleRate: 0.2,
+  enableNativeFramesTracking: true,
+});
 
 // Keep splash screen visible while loading auth
 SplashScreen.preventAutoHideAsync();
@@ -113,7 +121,7 @@ function AppContent(): React.ReactElement {
   );
 }
 
-export default function RootLayout(): React.ReactElement | null {
+function RootLayout(): React.ReactElement | null {
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -127,3 +135,5 @@ export default function RootLayout(): React.ReactElement | null {
     </ErrorBoundary>
   );
 }
+
+export default Sentry.wrap(RootLayout);

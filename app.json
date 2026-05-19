@@ -43,7 +43,10 @@
               "scheme": "speakeasy"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -59,7 +62,8 @@
         {
           "microphonePermission": "SpeakEasy needs microphone access to record your spoken answers for pronunciation scoring."
         }
-      ]
+      ],
+      "@sentry/react-native"
     ],
     "newArchEnabled": false,
     "experiments": {
