@@ -1,10 +1,15 @@
-// Deep-link callback — Android routes exp:// or speakeasy:// here after Google OAuth.
+// Deep-link callback — Android routes speakeasy:// here after Google OAuth.
 // iOS catches it inside WebBrowser.openAuthSessionAsync instead (returns type:"success").
+// maybeCompleteAuthSession() closes the Chrome Custom Tab on Android so the browser
+// doesn't stay open on top of the native app.
 
 import React, { useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { useAuthStore } from "@/lib/authStore";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function AuthCallbackScreen(): React.ReactElement {
   const router = useRouter();
