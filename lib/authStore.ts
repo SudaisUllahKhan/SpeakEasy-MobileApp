@@ -39,7 +39,37 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       } else {
         await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
       }
-      set({ token, isAuthenticated: !!token });
+      // Clear any stale user immediately so previous user's data never shows
+      set({ token, isAuthenticated: !!token, user: null });
+
+      // Fetch fresh profile for the new token right away
+      if (token) {
+        void import("./api").then(async ({ getUserSettings }) => {
+          try {
+            const settings = await getUserSettings();
+            const user: UserProfile = {
+              id: "",
+              email: settings.email ?? "",
+              name: settings.name,
+              image: null,
+              role: "STUDENT",
+              level: settings.level as Level,
+              nativeLanguage: settings.nativeLanguage,
+              preferredAccent: settings.preferredAccent as Accent,
+              audioSpeed: settings.audioSpeed,
+              streakCount: 0,
+              totalXP: 0,
+              onboardingDone: true,
+              isPremium: false,
+              badges: [],
+              createdAt: new Date().toISOString(),
+            };
+            set({ user });
+          } catch {
+            // Non-fatal — user stays null until next refresh
+          }
+        });
+      }
     } catch (err) {
       console.error("[authStore] setToken error:", err);
     }
