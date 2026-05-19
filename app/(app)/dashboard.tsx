@@ -11,10 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
-import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { ProgressRing } from "@/components/ui/ProgressRing";
 import { DashboardSkeleton } from "@/components/ui/SkeletonLoader";
 import { getDashboard } from "@/lib/api";
 import { useAuthStore } from "@/lib/authStore";
@@ -24,7 +21,6 @@ import {
   fontWeight,
   borderRadius,
   spacing,
-  levelColors,
   shadow,
 } from "@/lib/theme";
 import {
@@ -35,24 +31,42 @@ import {
 } from "@/lib/utils";
 import type { Level } from "@/lib/types";
 
-// XP thresholds per level
 const XP_THRESHOLDS: Record<Level, number> = {
   A1: 500,
   A2: 1500,
   B1: 5000,
 };
 
+// Unique color per topic slug
+const TOPIC_PALETTE: Record<string, { bg: string; iconColor: string }> = {
+  "greetings":      { bg: "#FFF7ED", iconColor: "#F97316" },
+  "daily-routine":  { bg: "#EFF6FF", iconColor: "#3B82F6" },
+  "family":         { bg: "#FFF1F2", iconColor: "#F43F5E" },
+  "food-drink":     { bg: "#F0FDF4", iconColor: "#22C55E" },
+  "school-work":    { bg: "#EEF2FF", iconColor: "#6366F1" },
+  "travel":         { bg: "#FDF4FF", iconColor: "#A855F7" },
+  "hobbies":        { bg: "#FFFBEB", iconColor: "#D97706" },
+  "health":         { bg: "#ECFDF5", iconColor: "#10B981" },
+  "technology":     { bg: "#F0F9FF", iconColor: "#0EA5E9" },
+  "environment":    { bg: "#F7FEE7", iconColor: "#65A30D" },
+};
+
+const FALLBACK_PALETTE = [
+  { bg: "#FFF7ED", iconColor: "#F97316" },
+  { bg: "#EFF6FF", iconColor: "#3B82F6" },
+  { bg: "#F0FDF4", iconColor: "#22C55E" },
+  { bg: "#EEF2FF", iconColor: "#6366F1" },
+];
+
+function getTopicPalette(slug: string, idx: number) {
+  return TOPIC_PALETTE[slug] ?? FALLBACK_PALETTE[idx % FALLBACK_PALETTE.length];
+}
+
 export default function DashboardScreen(): React.ReactElement {
   const router = useRouter();
   const { user } = useAuthStore();
 
-  const {
-    data,
-    isLoading,
-    isError,
-    refetch,
-    isRefetching,
-  } = useQuery({
+  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ["dashboard"],
     queryFn: getDashboard,
   });
@@ -64,25 +78,18 @@ export default function DashboardScreen(): React.ReactElement {
     ? rawName.split(" ")[0]
     : (user?.email?.split("@")[0] ?? "");
 
-  if (isLoading) {
-    return <DashboardSkeleton />;
-  }
+  if (isLoading) return <DashboardSkeleton />;
 
   if (isError || !data) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorState}>
-          <Ionicons name="cloud-offline-outline" size={48} color={colors.muted} />
+          <View style={styles.errorIconWrap}>
+            <Ionicons name="cloud-offline-outline" size={32} color={colors.primary} />
+          </View>
           <Text style={styles.errorTitle}>Could not load dashboard</Text>
-          <Text style={styles.errorSubtitle}>
-            Check your connection and try again.
-          </Text>
-          <Button
-            onPress={() => refetch()}
-            variant="primary"
-            style={{ marginTop: spacing.md }}
-            accessibilityLabel="Retry loading dashboard"
-          >
+          <Text style={styles.errorSubtitle}>Check your connection and try again.</Text>
+          <Button onPress={() => refetch()} variant="primary" style={{ marginTop: spacing.md }}>
             Try again
           </Button>
         </View>
@@ -90,185 +97,182 @@ export default function DashboardScreen(): React.ReactElement {
     );
   }
 
-  const level = data.level ?? user?.level ?? "A1";
-  const xpMax = XP_THRESHOLDS[level as Level];
+  const level = (data.level ?? user?.level ?? "A1") as Level;
+  const xpMax = XP_THRESHOLDS[level];
   const xpProgress = Math.min(data.totalXP / xpMax, 1);
-  const levelColor = getLevelColor(level as Level);
+  const levelColor = getLevelColor(level);
+  const xpPct = Math.round(xpProgress * 100);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            tintColor={colors.primary}
+            tintColor={colors.white}
           />
         }
         contentContainerStyle={styles.scroll}
+        bounces
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>
-              {greeting}{firstName ? `, ${firstName}` : ""}
-            </Text>
-            <Text style={styles.greetingSubtitle}>
-              Ready to practice today?
-            </Text>
-          </View>
-          <View style={[styles.levelBadge, { backgroundColor: levelColor }]}>
-            <Text style={styles.levelBadgeText}>{level}</Text>
-          </View>
-        </View>
+        {/* ── Hero Banner ────────────────────────────────────────────── */}
+        <SafeAreaView edges={["top"]} style={styles.hero}>
+          {/* Decorative circles */}
+          <View style={styles.decCircle1} />
+          <View style={styles.decCircle2} />
 
-        {/* Stats Row */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.statsRow}
-        >
-          <StatCard
-            icon="flame"
-            iconColor="#F97316"
-            label="Day streak"
-            value={`${data.streakCount}`}
-          />
-          <StatCard
-            icon="star"
-            iconColor="#F59E0B"
-            label="Total XP"
-            value={formatXP(data.totalXP)}
-          />
-          <StatCard
-            icon="library"
-            iconColor={colors.primary}
-            label="Words to review"
-            value={`${data.difficultWordsCount}`}
-          />
-        </ScrollView>
-
-        {/* XP Progress */}
-        <Card elevated style={styles.xpCard}>
-          <View style={styles.xpCardContent}>
-            <ProgressRing
-              progress={xpProgress}
-              size={90}
-              strokeWidth={8}
-              color={levelColor}
-              label={formatXP(data.totalXP)}
-              sublabel="XP"
-            />
-            <View style={styles.xpInfo}>
-              <Text style={styles.xpTitle}>Level {level}</Text>
-              <Text style={styles.xpSubtitle}>
-                {formatXP(data.totalXP)} / {formatXP(xpMax)} XP to next level
+          {/* Greeting row */}
+          <View style={styles.heroTop}>
+            <View style={styles.heroGreetingBlock}>
+              <Text style={styles.heroGreeting}>
+                {greeting}{firstName ? `, ${firstName}` : ""}
               </Text>
-              <View style={styles.xpBar}>
-                <View
-                  style={[
-                    styles.xpBarFill,
-                    {
-                      width: `${Math.round(xpProgress * 100)}%`,
-                      backgroundColor: levelColor,
-                    },
-                  ]}
-                />
-              </View>
+              <Text style={styles.heroSub}>Ready to practice today?</Text>
+            </View>
+            <View style={[styles.levelPill, { backgroundColor: levelColor }]}>
+              <Text style={styles.levelPillText}>{level}</Text>
             </View>
           </View>
-        </Card>
 
-        {/* Daily Quote */}
-        <Card style={styles.quoteCard}>
-          <View style={styles.quoteContent}>
-            <Ionicons
-              name="sparkles-outline"
-              size={20}
-              color={colors.primary}
-              style={styles.quoteIcon}
-            />
+          {/* Hero stats row */}
+          <View style={styles.heroStats}>
+            <HeroStat icon="flame" color="#FF9500" value={`${data.streakCount}`} label="Streak" />
+            <View style={styles.heroStatDivider} />
+            <HeroStat icon="star" color="#FFD60A" value={formatXP(data.totalXP)} label="Total XP" />
+            <View style={styles.heroStatDivider} />
+            <HeroStat icon="library" color="#BFB0FF" value={`${data.difficultWordsCount}`} label="To Review" />
+          </View>
+        </SafeAreaView>
+
+        {/* ── Content area ───────────────────────────────────────────── */}
+        <View style={styles.content}>
+
+          {/* XP Progress Card */}
+          <View style={styles.xpCard}>
+            <View style={styles.xpCardHeader}>
+              <View>
+                <Text style={styles.xpCardLabel}>LEVEL PROGRESS</Text>
+                <Text style={styles.xpCardLevel}>Level {level}</Text>
+              </View>
+              <View style={[styles.xpPctBadge, { backgroundColor: `${levelColor}20` }]}>
+                <Text style={[styles.xpPctText, { color: levelColor }]}>{xpPct}%</Text>
+              </View>
+            </View>
+            <View style={styles.xpBarTrack}>
+              <View
+                style={[
+                  styles.xpBarFill,
+                  { width: `${xpPct}%`, backgroundColor: levelColor },
+                ]}
+              />
+            </View>
+            <Text style={styles.xpCardFooter}>
+              <Text style={[styles.xpVal, { color: levelColor }]}>{formatXP(data.totalXP)}</Text>
+              <Text style={styles.xpMax}> / {formatXP(xpMax)} XP to next level</Text>
+            </Text>
+          </View>
+
+          {/* Quote card */}
+          <View style={styles.quoteCard}>
+            <Ionicons name="sparkles" size={16} color={colors.primary} style={styles.quoteIcon} />
             <Text style={styles.quoteText}>{quote}</Text>
           </View>
-        </Card>
 
-        {/* CTA */}
-        <Button
-          onPress={() => router.push("/(app)/topics")}
-          size="lg"
-          fullWidth
-          style={styles.ctaButton}
-          accessibilityLabel="Start learning"
-        >
-          Start Learning
-        </Button>
+          {/* CTA */}
+          <TouchableOpacity
+            style={styles.ctaBtn}
+            onPress={() => router.push("/(app)/topics")}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="play" size={20} color={colors.white} style={{ marginRight: 8 }} />
+            <Text style={styles.ctaBtnText}>Start Learning</Text>
+            <Ionicons name="arrow-forward" size={18} color="rgba(255,255,255,0.7)" style={{ marginLeft: 6 }} />
+          </TouchableOpacity>
 
-        {/* Topic Progress */}
-        {data.topicsProgress.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Your topics</Text>
-            {data.topicsProgress.slice(0, 4).map((topic) => (
-              <TouchableOpacity
-                key={topic.topicId}
-                style={styles.topicRow}
-                onPress={() =>
-                  router.push(`/(app)/topics/${topic.topicSlug}`)
-                }
-                accessibilityLabel={`${topic.topicName} topic, ${topic.lessonsCompleted} of ${topic.totalLessons} lessons completed`}
-              >
-                <View style={styles.topicRowLeft}>
-                  <View style={styles.topicIcon}>
-                    <Text style={styles.topicIconEmoji}>{topic.topicIcon}</Text>
-                  </View>
-                  <View style={styles.topicRowInfo}>
-                    <Text style={styles.topicRowName}>{topic.topicName}</Text>
-                    <Text style={styles.topicRowStats}>
-                      {topic.lessonsCompleted}/{topic.totalLessons} lessons
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.topicRowRight}>
-                  <View style={styles.miniProgressTrack}>
-                    <View
-                      style={[
-                        styles.miniProgressFill,
-                        {
-                          width: `${topic.totalLessons > 0 ? Math.round((topic.lessonsCompleted / topic.totalLessons) * 100) : 0}%`,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={16}
-                    color={colors.muted}
-                  />
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+          {/* Topic Progress */}
+          {data.topicsProgress.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Your Topics</Text>
+                <TouchableOpacity onPress={() => router.push("/(app)/topics")}>
+                  <Text style={styles.sectionLink}>See all</Text>
+                </TouchableOpacity>
+              </View>
+              {data.topicsProgress.slice(0, 5).map((topic, idx) => {
+                const palette = getTopicPalette(topic.topicSlug, idx);
+                const pct = topic.totalLessons > 0
+                  ? Math.round((topic.lessonsCompleted / topic.totalLessons) * 100)
+                  : 0;
+                const done = topic.lessonsCompleted === topic.totalLessons && topic.totalLessons > 0;
+                return (
+                  <TouchableOpacity
+                    key={topic.topicId}
+                    style={styles.topicCard}
+                    onPress={() => router.push(`/(app)/topics/${topic.topicSlug}`)}
+                    activeOpacity={0.8}
+                    accessibilityLabel={`${topic.topicName}, ${topic.lessonsCompleted} of ${topic.totalLessons} lessons`}
+                  >
+                    {/* Icon */}
+                    <View style={[styles.topicIconBox, { backgroundColor: palette.bg }]}>
+                      <Text style={styles.topicEmoji}>{topic.topicIcon}</Text>
+                    </View>
+
+                    {/* Info */}
+                    <View style={styles.topicInfo}>
+                      <View style={styles.topicInfoRow}>
+                        <Text style={styles.topicName} numberOfLines={1}>{topic.topicName}</Text>
+                        {done && (
+                          <View style={styles.doneChip}>
+                            <Ionicons name="checkmark" size={10} color="#22C55E" />
+                            <Text style={styles.doneText}>Done</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.topicMeta}>
+                        <View style={styles.topicProgressTrack}>
+                          <View
+                            style={[
+                              styles.topicProgressFill,
+                              { width: `${pct}%`, backgroundColor: palette.iconColor },
+                            ]}
+                          />
+                        </View>
+                        <Text style={styles.topicLessons}>
+                          {topic.lessonsCompleted}/{topic.totalLessons}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Arrow */}
+                    <View style={[styles.topicArrow, { backgroundColor: palette.bg }]}>
+                      <Ionicons name="chevron-forward" size={14} color={palette.iconColor} />
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-interface StatCardProps {
+interface HeroStatProps {
   icon: React.ComponentProps<typeof Ionicons>["name"];
-  iconColor: string;
-  label: string;
+  color: string;
   value: string;
+  label: string;
 }
 
-function StatCard({ icon, iconColor, label, value }: StatCardProps) {
+function HeroStat({ icon, color, value, label }: HeroStatProps) {
   return (
-    <View style={styles.statCard}>
-      <View style={[styles.statIcon, { backgroundColor: `${iconColor}20` }]}>
-        <Ionicons name={icon} size={22} color={iconColor} />
-      </View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+    <View style={styles.heroStatItem}>
+      <Ionicons name={icon} size={18} color={color} style={styles.heroStatIcon} />
+      <Text style={styles.heroStatValue}>{value}</Text>
+      <Text style={styles.heroStatLabel}>{label}</Text>
     </View>
   );
 }
@@ -279,204 +283,333 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   scroll: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xl,
-    paddingTop: spacing.md,
+    paddingBottom: spacing.xl + 16,
   },
-  header: {
+
+  // ── Hero ──────────────────────────────────────────────────────────
+  hero: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingBottom: 28,
+    overflow: "hidden",
+  },
+  decCircle1: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    top: -60,
+    right: -50,
+  },
+  decCircle2: {
+    position: "absolute",
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    bottom: -30,
+    left: -20,
+  },
+  heroTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: 20,
   },
-  greeting: {
+  heroGreetingBlock: {
+    flex: 1,
+    marginRight: 12,
+  },
+  heroGreeting: {
     fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
+    fontWeight: fontWeight.extrabold,
+    color: colors.white,
+    letterSpacing: -0.3,
   },
-  greetingSubtitle: {
+  heroSub: {
     fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginTop: 2,
+    color: "rgba(255,255,255,0.72)",
+    marginTop: 3,
   },
-  levelBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+  levelPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderRadius: borderRadius.full,
   },
-  levelBadgeText: {
+  levelPillText: {
     fontSize: fontSize.sm,
-    fontWeight: fontWeight.bold,
+    fontWeight: fontWeight.extrabold,
     color: colors.white,
+    letterSpacing: 0.5,
   },
-  statsRow: {
-    gap: 10,
-    paddingRight: spacing.md,
-    marginBottom: spacing.md,
+
+  // Hero stats
+  heroStats: {
+    flexDirection: "row",
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: borderRadius.xl,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
   },
-  statCard: {
-    width: 110,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: 14,
+  heroStatItem: {
+    flex: 1,
     alignItems: "center",
+    gap: 3,
+  },
+  heroStatIcon: {
+    marginBottom: 2,
+  },
+  heroStatValue: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.extrabold,
+    color: colors.white,
+    letterSpacing: -0.5,
+  },
+  heroStatLabel: {
+    fontSize: 10,
+    fontWeight: fontWeight.medium,
+    color: "rgba(255,255,255,0.65)",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  heroStatDivider: {
+    width: 1,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    marginVertical: 4,
+  },
+
+  // ── Content ───────────────────────────────────────────────────────
+  content: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+  },
+
+  // XP card
+  xpCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
     ...shadow.sm,
   },
-  statIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
+  xpCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  statValue: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    color: colors.text,
+  xpCardLabel: {
+    fontSize: 10,
+    fontWeight: fontWeight.semibold,
+    color: colors.muted,
+    letterSpacing: 1,
+    textTransform: "uppercase",
     marginBottom: 2,
   },
-  statLabel: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    textAlign: "center",
-  },
-  xpCard: {
-    marginBottom: spacing.md,
-  },
-  xpCardContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  xpInfo: {
-    flex: 1,
-  },
-  xpTitle: {
+  xpCardLevel: {
     fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
+    fontWeight: fontWeight.extrabold,
     color: colors.text,
-    marginBottom: 4,
   },
-  xpSubtitle: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginBottom: 8,
+  xpPctBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: borderRadius.full,
   },
-  xpBar: {
-    height: 6,
-    backgroundColor: colors.border,
+  xpPctText: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.extrabold,
+  },
+  xpBarTrack: {
+    height: 8,
+    backgroundColor: "#F3F0FF",
     borderRadius: borderRadius.full,
     overflow: "hidden",
+    marginBottom: 10,
   },
   xpBarFill: {
     height: "100%",
     borderRadius: borderRadius.full,
   },
-  quoteCard: {
-    marginBottom: spacing.md,
-    backgroundColor: colors.primaryBg,
-    borderColor: "transparent",
+  xpCardFooter: {
+    fontSize: fontSize.xs,
   },
-  quoteContent: {
+  xpVal: {
+    fontWeight: fontWeight.bold,
+  },
+  xpMax: {
+    color: colors.textSecondary,
+  },
+
+  // Quote
+  quoteCard: {
     flexDirection: "row",
     alignItems: "flex-start",
+    backgroundColor: colors.primaryBg,
+    borderRadius: borderRadius.lg,
+    padding: 14,
+    marginBottom: spacing.md,
     gap: 10,
   },
   quoteIcon: {
-    marginTop: 2,
+    marginTop: 1,
+    flexShrink: 0,
   },
   quoteText: {
     flex: 1,
     fontSize: fontSize.sm,
     color: colors.primaryDark,
     fontStyle: "italic",
-    lineHeight: 22,
+    lineHeight: 20,
   },
-  ctaButton: {
+
+  // CTA button
+  ctaBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.xl,
+    paddingVertical: 17,
     marginBottom: spacing.lg,
     ...shadow.md,
   },
+  ctaBtnText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.extrabold,
+    color: colors.white,
+    letterSpacing: 0.3,
+  },
+
+  // Topics section
   section: {
     marginBottom: spacing.lg,
   },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
   sectionTitle: {
     fontSize: fontSize.md,
-    fontWeight: fontWeight.bold,
+    fontWeight: fontWeight.extrabold,
     color: colors.text,
-    marginBottom: spacing.sm,
+    letterSpacing: -0.2,
   },
-  topicRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  topicRowLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  topicIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primaryBg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  topicIconEmoji: {
-    fontSize: 20,
-  },
-  topicRowInfo: {
-    flex: 1,
-  },
-  topicRowName: {
+  sectionLink: {
     fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
-    color: colors.text,
+    color: colors.primary,
   },
-  topicRowStats: {
-    fontSize: fontSize.xs,
-    color: colors.textSecondary,
-    marginTop: 2,
+  topicCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.xl,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 14,
+    ...shadow.sm,
   },
-  topicRowRight: {
+  topicIconBox: {
+    width: 46,
+    height: 46,
+    borderRadius: borderRadius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  topicEmoji: {
+    fontSize: 22,
+  },
+  topicInfo: {
+    flex: 1,
+    gap: 6,
+  },
+  topicInfoRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  miniProgressTrack: {
-    width: 60,
+  topicName: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
+    flex: 1,
+  },
+  doneChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#DCFCE7",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+  },
+  doneText: {
+    fontSize: 10,
+    fontWeight: fontWeight.semibold,
+    color: "#22C55E",
+  },
+  topicMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  topicProgressTrack: {
+    flex: 1,
     height: 4,
-    backgroundColor: colors.border,
+    backgroundColor: "#F3F0FF",
     borderRadius: borderRadius.full,
     overflow: "hidden",
   },
-  miniProgressFill: {
+  topicProgressFill: {
     height: "100%",
-    backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
   },
+  topicLessons: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.textSecondary,
+    minWidth: 28,
+    textAlign: "right",
+  },
+  topicArrow: {
+    width: 28,
+    height: 28,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+
+  // Error
   errorState: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: spacing.xl,
   },
+  errorIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.primaryBg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.md,
+  },
   errorTitle: {
     fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
     color: colors.text,
-    marginTop: spacing.md,
     marginBottom: 6,
   },
   errorSubtitle: {
