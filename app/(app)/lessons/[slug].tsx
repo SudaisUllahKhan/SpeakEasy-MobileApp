@@ -108,7 +108,7 @@ const VOICE_PRESETS: VoicePreset[] = [
   { id: "storyteller", label: "Story",      icon: "🎭",  iconType: "flag", color: "#92400E", pitch: 1.15, rate: 0.75, language: "en-US" },
 ];
 
-const SPEED_OPTIONS = ["0.25", "0.5", "0.75", "1", "1.5", "2"] as const;
+const SPEED_OPTIONS = ["0.25", "0.5", "0.75", "1", "1.25", "1.5", "2"] as const;
 type SpeedOption = typeof SPEED_OPTIONS[number];
 
 function wordWeight(word: string): number {
@@ -136,7 +136,7 @@ function calcWordTimestamps(words: string[], speed: SpeedOption, durationMs?: nu
   }
 
   // Fallback: WPM estimate
-  const wpm = speed === "2" ? 260 : speed === "1.5" ? 185 : speed === "0.75" ? 98 : speed === "0.5" ? 65 : speed === "0.25" ? 32 : 130;
+  const wpm = speed === "2" ? 260 : speed === "1.5" ? 185 : speed === "1.25" ? 158 : speed === "0.75" ? 98 : speed === "0.5" ? 65 : speed === "0.25" ? 32 : 130;
   const avgMs = 60000 / wpm;
   let t = startupMs;
   for (const word of words) {
@@ -397,7 +397,12 @@ function ListenStep({ lesson, level, onComplete }: ListenStepProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [replaysUsed, setReplaysUsed] = useState(0);
   const [selectedVoiceId, setSelectedVoiceId] = useState(defaultVoice);
-  const [selectedSpeed, setSelectedSpeed] = useState<SpeedOption>("1");
+  const [selectedSpeed, setSelectedSpeed] = useState<SpeedOption>(() => {
+    const s = user?.audioSpeed;
+    if (s === 0.75) return "0.75";
+    if (s === 1.25) return "1.25";
+    return "1";
+  });
   const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
   const soundRef = useRef<Audio.Sound | null>(null);
   const speakRequestRef = useRef(0);

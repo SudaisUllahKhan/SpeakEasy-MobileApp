@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   TouchableOpacity,
   Alert,
@@ -30,6 +31,7 @@ export default function LoginScreen(): React.ReactElement {
   const [isGoogleLoading, setGoogleLoading] = useState(false);
   const [isAppleLoading, setAppleLoading] = useState(false);
   const [isDevLoading, setDevLoading] = useState(false);
+  const [devEmail, setDevEmail] = useState("sudais.khan@consult-first.com");
   const [appleAvailable, setAppleAvailable] = useState(false);
 
   useEffect(() => {
@@ -108,12 +110,17 @@ export default function LoginScreen(): React.ReactElement {
 
   const handleDevLogin = async () => {
     Keyboard.dismiss();
+    const email = devEmail.trim().toLowerCase();
+    if (!email) {
+      Alert.alert("Dev Login", "Enter an email address first.");
+      return;
+    }
     setDevLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/auth/dev-login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "dev@speakeasy.test" }),
+        body: JSON.stringify({ email }),
       });
       const text = await res.text();
       if (!text) throw new Error(`Empty response (status ${res.status})`);
@@ -181,15 +188,27 @@ export default function LoginScreen(): React.ReactElement {
           </Text>
 
           {__DEV__ && (
-            <TouchableOpacity
-              style={styles.devButton}
-              onPress={handleDevLogin}
-              disabled={isDevLoading}
-            >
-              <Text style={styles.devButtonText}>
-                {isDevLoading ? "Logging in..." : "DEV LOGIN (skip auth)"}
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.devSection}>
+              <TextInput
+                style={styles.devEmailInput}
+                value={devEmail}
+                onChangeText={setDevEmail}
+                placeholder="your@email.com"
+                placeholderTextColor="rgba(255,255,255,0.4)"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                style={styles.devButton}
+                onPress={handleDevLogin}
+                disabled={isDevLoading}
+              >
+                <Text style={styles.devButtonText}>
+                  {isDevLoading ? "Logging in..." : "DEV LOGIN (skip auth)"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -312,8 +331,20 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.7)",
     textAlign: "center",
   },
-  devButton: {
+  devSection: {
     marginTop: 12,
+    gap: 6,
+  },
+  devEmailInput: {
+    borderWidth: 1,
+    borderColor: "#f97316",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    fontSize: fontSize.xs,
+    color: "#f97316",
+  },
+  devButton: {
     paddingVertical: 8,
     alignItems: "center",
     borderWidth: 1,

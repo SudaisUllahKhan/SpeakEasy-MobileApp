@@ -28,6 +28,12 @@ const LEVELS: { value: Level; label: string; desc: string }[] = [
   { value: "B1", label: "B1", desc: "Intermediate" },
 ];
 
+const SPEEDS: { value: number; label: string; desc: string }[] = [
+  { value: 0.75, label: "0.75×", desc: "Slow" },
+  { value: 1.0,  label: "1×",    desc: "Normal" },
+  { value: 1.25, label: "1.25×", desc: "Fast" },
+];
+
 
 function SavedToast({ visible }: { visible: boolean }) {
   const opacity = useRef(new Animated.Value(0)).current;
@@ -74,6 +80,7 @@ export default function SettingsScreen(): React.ReactElement {
   const [name, setName] = useState("");
   const [nativeLanguage, setNativeLanguage] = useState("");
   const [selectedLevel, setSelectedLevel] = useState<Level>("A1");
+  const [selectedSpeed, setSelectedSpeed] = useState<number>(1.0);
   const [toastKey, setToastKey] = useState(0);
   const [editingField, setEditingField] = useState<"name" | "language" | null>(null);
 
@@ -87,11 +94,13 @@ export default function SettingsScreen(): React.ReactElement {
       name: user.name,
       nativeLanguage: user.nativeLanguage,
       level: user.level,
+      audioSpeed: user.audioSpeed,
     } : null);
     if (src) {
       setName(src.name ?? "");
       setNativeLanguage(src.nativeLanguage ?? "");
       setSelectedLevel(src.level as Level);
+      setSelectedSpeed(src.audioSpeed ?? 1.0);
     }
   }, [settings, user]);
 
@@ -116,10 +125,11 @@ export default function SettingsScreen(): React.ReactElement {
       name: name.trim() || undefined,
       nativeLanguage: nativeLanguage.trim() || undefined,
       level: selectedLevel,
+      audioSpeed: selectedSpeed,
       ...patch,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [name, nativeLanguage, selectedLevel]);
+  }, [name, nativeLanguage, selectedLevel, selectedSpeed]);
 
   const deleteMutation = useMutation({
     mutationFn: deleteAccount,
@@ -295,6 +305,40 @@ export default function SettingsScreen(): React.ReactElement {
                 />
               </View>
             )}
+
+            <View style={styles.divider} />
+
+            {/* Audio speed */}
+            <View style={styles.row}>
+              <View style={styles.rowLeft}>
+                <Ionicons name="speedometer-outline" size={20} color={colors.primary} style={styles.rowIcon} />
+                <View>
+                  <Text style={styles.rowLabel}>Playback speed</Text>
+                  <Text style={styles.rowSub}>Default speed for lesson audio</Text>
+                </View>
+              </View>
+            </View>
+            <View style={[styles.segmentGroup, { marginBottom: 14 }]}>
+              {SPEEDS.map((sp) => (
+                <TouchableOpacity
+                  key={sp.value}
+                  style={[styles.segment, selectedSpeed === sp.value && styles.segmentActive]}
+                  onPress={() => {
+                    setSelectedSpeed(sp.value);
+                    autoSave({ audioSpeed: sp.value });
+                  }}
+                  accessibilityLabel={`${sp.label} ${sp.desc}`}
+                  accessibilityState={{ selected: selectedSpeed === sp.value }}
+                >
+                  <Text style={[styles.segmentLabel, selectedSpeed === sp.value && styles.segmentLabelActive]}>
+                    {sp.label}
+                  </Text>
+                  <Text style={[styles.segmentDesc, selectedSpeed === sp.value && styles.segmentDescActive]}>
+                    {sp.desc}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
           {/* ── Account ── */}

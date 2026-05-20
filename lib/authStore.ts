@@ -88,9 +88,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (!alreadyHasToken) set({ isLoading: true });
     try {
       // Read from SecureStore only — fast (<100ms), never blocks on network.
-      const token = alreadyHasToken
+      const rawToken = alreadyHasToken
         ? get().token
         : await SecureStore.getItemAsync(SESSION_TOKEN_KEY);
+      const token = rawToken?.trim() || null; // reject empty-string fallback written by logout
 
       if (token) {
         set({ token, isAuthenticated: true });
@@ -142,6 +143,8 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   logout: async () => {
     const currentToken = get().token;
+    // Wipe React Query cache so stale data never bleeds into the next user's session
+    void import("./queryClient").then(({ queryClient }) => queryClient.clear());
     // Kill the server-side session so Chrome Custom Tabs' shared cookie
     // doesn't return the old user's token on the next Google OAuth flow.
     if (currentToken) {
@@ -149,8 +152,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
     try {
       await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
-    } catch (err) {
-      console.error("[authStore] logout error:", err);
+    } catch {
+      // Fallback: overwrite with empty string so loadFromStorage ignores it
+      try { await SecureStore.setItemAsync(SESSION_TOKEN_KEY, ""); } catch { /* ignore */ }
     }
     set({ token: null, user: null, isAuthenticated: false });
   },
