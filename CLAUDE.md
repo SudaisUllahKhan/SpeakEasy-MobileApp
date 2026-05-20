@@ -36,6 +36,7 @@ After Metro starts, a **QR code** appears in the terminal.
 Pre-approved emails (server allows these without any config change):
 - `sudais.khan@consult-first.com`
 - `sudaiskhan1@gmail.com`
+- `muneeb.iqbal@consult-first.com`
 - `dev@speakeasy.test`
 - `test@speakeasy.test`
 

@@ -602,7 +602,7 @@ function ListenStep({ lesson, level, onComplete }: ListenStepProps) {
         {/* Speed selector */}
         <View style={styles.speedSelectorRow}>
           <Text style={styles.speedSelectorLabel}>Speed</Text>
-          <View style={styles.speedButtons}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.speedButtons}>
             {SPEED_OPTIONS.map((s) => (
               <TouchableOpacity
                 key={s}
@@ -618,7 +618,7 @@ function ListenStep({ lesson, level, onComplete }: ListenStepProps) {
                 </Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </ScrollView>
         </View>
 
         {/* Player controls */}
@@ -1005,7 +1005,7 @@ function ReadAloudStep({ lesson, level, user, onComplete }: ReadAloudStepProps) 
               </ScrollView>
               <View style={[styles.speedSelectorRow, { marginBottom: 8 }]}>
                 <Text style={styles.speedSelectorLabel}>Speed</Text>
-                <View style={styles.speedButtons}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.speedButtons}>
                   {SPEED_OPTIONS.map((s) => (
                     <TouchableOpacity
                       key={s}
@@ -1021,7 +1021,7 @@ function ReadAloudStep({ lesson, level, user, onComplete }: ReadAloudStepProps) 
                       </Text>
                     </TouchableOpacity>
                   ))}
-                </View>
+                </ScrollView>
               </View>
 
               <TouchableOpacity
@@ -2280,9 +2280,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   speedSelectorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
     marginBottom: spacing.md,
   },
   speedSelectorLabel: {
@@ -2291,11 +2288,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textTransform: "uppercase",
     letterSpacing: 0.5,
+    marginBottom: 8,
   },
   speedButtons: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 6,
+    paddingRight: 4,
   },
   speedBtn: {
     paddingHorizontal: 9,
