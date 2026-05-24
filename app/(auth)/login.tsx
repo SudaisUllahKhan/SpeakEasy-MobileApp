@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, fontSize, fontWeight, borderRadius, spacing } from "@/lib/theme";
 import { getGoogleAuthUrl } from "@/lib/api";
 import { useAuthStore } from "@/lib/authStore";
+import { GoogleIcon } from "@/components/ui/GoogleIcon";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -41,6 +42,16 @@ export default function LoginScreen(): React.ReactElement {
   }, []);
 
   const handleGoogleSignIn = async () => {
+    // Expo Go uses exp:// URLs which Chrome Custom Tab cannot intercept —
+    // the OAuth redirect back to the app silently fails. Google OAuth only
+    // works in a standalone build where speakeasy:// is a registered scheme.
+    if (__DEV__) {
+      Alert.alert(
+        "Not available in Expo Go",
+        "Google sign-in requires the real app build. Use DEV LOGIN below to continue.",
+      );
+      return;
+    }
     Keyboard.dismiss();
     setGoogleLoading(true);
     try {
@@ -156,7 +167,7 @@ export default function LoginScreen(): React.ReactElement {
 
           {/* Google */}
           <TouchableOpacity
-            style={[styles.googleButton, isGoogleLoading && styles.disabledButton]}
+            style={[styles.googleButton, (isGoogleLoading || __DEV__) && styles.disabledButton]}
             onPress={handleGoogleSignIn}
             disabled={isGoogleLoading}
             accessibilityLabel="Continue with Google"
@@ -165,10 +176,10 @@ export default function LoginScreen(): React.ReactElement {
             {isGoogleLoading ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
-              <Ionicons name="logo-google" size={20} color="#4285F4" />
+              <GoogleIcon size={20} muted={__DEV__} />
             )}
-            <Text style={styles.googleButtonText}>
-              {isGoogleLoading ? "Signing in..." : "Continue with Google"}
+            <Text style={[styles.googleButtonText, __DEV__ && { color: colors.muted }]}>
+              {isGoogleLoading ? "Signing in..." : __DEV__ ? "Continue with Google (unavailable in Expo Go)" : "Continue with Google"}
             </Text>
           </TouchableOpacity>
 
